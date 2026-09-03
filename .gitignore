@@ -1,0 +1,43 @@
+# keys
+*.jks
+*.keystore
+keybox.xml
+keybox.xml.bak
+local.properties
+
+# binaries / downloads (kept locally, see README)
+*.apk
+*.img
+*.zip
+*.7z
+*.dex
+*.jar
+*.so
+*.ttf
+*.ttc
+*.otf
+*.woff
+*.woff2
+*.agc
+install/
+magisk/
+firmware/
+camera/
+apps/
+fonts/inter/
+fonts/stock/
+
+# third-party reference / decompiled
+ref/
+
+# build output
+build/
+.gradle/
+.kotlin/
+*.iml
+.idea/
+
+# local
+phone-backup
+.claude/
+.DS_Store
