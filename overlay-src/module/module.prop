@@ -1,0 +1,6 @@
+id=nees_notifstyle
+name=Notification Style (rounded cards)
+version=v1
+versionCode=1
+author=nees
+description=SystemUI overlay: 28dp rounded notification cards with gaps (iOS/Pixel style)
