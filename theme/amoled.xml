@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<overlay>
+    <item target="color/system_background_dark" value="0xff000000" />
+    <item target="color/system_surface_dark" value="0xff000000" />
+    <item target="color/system_surface_dim_dark" value="0xff000000" />
+    <item target="color/system_surface_container_lowest_dark" value="0xff000000" />
+    <item target="color/system_surface_container_low_dark" value="0xff050505" />
+    <item target="color/system_surface_container_dark" value="0xff0b0b0b" />
+    <item target="color/system_surface_container_high_dark" value="0xff141414" />
+    <item target="color/system_surface_container_highest_dark" value="0xff1c1c1c" />
+    <item target="color/system_surface_bright_dark" value="0xff222222" />
+    <item target="color/system_under_surface_dark" value="0xff000000" />
+    <item target="color/system_widget_background_dark" value="0xff000000" />
+    <item target="color/system_overview_background_dark" value="0xff000000" />
+    <item target="color/system_neutral1_900" value="0xff000000" />
+    <item target="color/system_neutral2_900" value="0xff000000" />
+    <item target="color/system_neutral1_800" value="0xff141414" />
+    <item target="color/system_neutral2_800" value="0xff161616" />
+    <item target="color/system_surface_variant_dark" value="0xff000000" />
+</overlay>
