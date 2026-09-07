@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Rounded notification cards (stock: 16dp / 4dp / 2dp) -->
+    <dimen name="notification_corner_radius">28dp</dimen>
+    <dimen name="notification_corner_radius_small">28dp</dimen>
+    <dimen name="notification_divider_height">6dp</dimen>
+</resources>
