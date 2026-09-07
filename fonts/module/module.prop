@@ -1,0 +1,6 @@
+id=nees_interfont
+name=Inter System Font
+version=v4.1
+versionCode=41
+author=nees
+description=Replaces the sans-serif system font (Roboto) with Inter v4.1 (OFL). Nothing NDot/NType fonts unchanged.
