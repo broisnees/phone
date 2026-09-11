@@ -346,3 +346,194 @@
         </font>
     </family>
 
+    <!-- fallback fonts -->
+    <family lang="und-Arab" variant="elegant">
+        <font weight="400" style="normal" postScriptName="NotoNaskhArabic">
+            NotoNaskhArabic-Regular.ttf
+        </font>
+        <font weight="700" style="normal">NotoNaskhArabic-Bold.ttf</font>
+    </family>
+    <family lang="und-Arab" variant="compact">
+        <font weight="400" style="normal" postScriptName="NotoNaskhArabicUI">
+            NotoNaskhArabicUI-Regular.ttf
+        </font>
+        <font weight="700" style="normal">NotoNaskhArabicUI-Bold.ttf</font>
+    </family>
+    <family lang="und-Ethi">
+        <font weight="400" style="normal" postScriptName="NotoSansEthiopic-Regular">
+            NotoSansEthiopic-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" postScriptName="NotoSansEthiopic-Regular">
+            NotoSansEthiopic-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" postScriptName="NotoSansEthiopic-Regular">
+            NotoSansEthiopic-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" postScriptName="NotoSansEthiopic-Regular">
+            NotoSansEthiopic-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+        <font weight="400" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifEthiopic-Regular">NotoSerifEthiopic-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifEthiopic-Regular">NotoSerifEthiopic-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifEthiopic-Regular">NotoSerifEthiopic-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifEthiopic-Regular">NotoSerifEthiopic-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+    </family>
+    <family lang="und-Hebr">
+        <font weight="400" style="normal" postScriptName="NotoSansHebrew">
+            NotoSansHebrew-Regular.ttf
+        </font>
+        <font weight="700" style="normal">NotoSansHebrew-Bold.ttf</font>
+        <font weight="400" style="normal" fallbackFor="serif">NotoSerifHebrew-Regular.ttf</font>
+        <font weight="700" style="normal" fallbackFor="serif">NotoSerifHebrew-Bold.ttf</font>
+    </family>
+    <family lang="und-Thai" variant="elegant">
+        <font weight="400" style="normal" postScriptName="NotoSansThai">NotoSansThai-Regular.ttf
+        </font>
+        <font weight="700" style="normal">NotoSansThai-Bold.ttf</font>
+        <font weight="400" style="normal" fallbackFor="serif">
+            NotoSerifThai-Regular.ttf
+        </font>
+        <font weight="700" style="normal" fallbackFor="serif">NotoSerifThai-Bold.ttf</font>
+    </family>
+    <family lang="und-Thai" variant="compact">
+        <font weight="400" style="normal" postScriptName="NotoSansThaiUI">
+            NotoSansThaiUI-Regular.ttf
+        </font>
+        <font weight="700" style="normal">NotoSansThaiUI-Bold.ttf</font>
+    </family>
+    <family lang="und-Armn">
+        <font weight="400" style="normal" postScriptName="NotoSansArmenian-Regular">
+            NotoSansArmenian-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" postScriptName="NotoSansArmenian-Regular">
+            NotoSansArmenian-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" postScriptName="NotoSansArmenian-Regular">
+            NotoSansArmenian-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" postScriptName="NotoSansArmenian-Regular">
+            NotoSansArmenian-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+        <font weight="400" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifArmenian-Regular">NotoSerifArmenian-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifArmenian-Regular">NotoSerifArmenian-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifArmenian-Regular">NotoSerifArmenian-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifArmenian-Regular">NotoSerifArmenian-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+    </family>
+    <family lang="und-Geor,und-Geok">
+        <font weight="400" style="normal" postScriptName="NotoSansGeorgian-Regular">
+            NotoSansGeorgian-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" postScriptName="NotoSansGeorgian-Regular">
+            NotoSansGeorgian-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" postScriptName="NotoSansGeorgian-Regular">
+            NotoSansGeorgian-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" postScriptName="NotoSansGeorgian-Regular">
+            NotoSansGeorgian-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+        <font weight="400" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifGeorgian-Regular">NotoSerifGeorgian-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifGeorgian-Regular">NotoSerifGeorgian-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifGeorgian-Regular">NotoSerifGeorgian-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifGeorgian-Regular">NotoSerifGeorgian-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+    </family>
+    <family lang="und-Deva" variant="elegant">
+        <font weight="400" style="normal" postScriptName="NotoSansDevanagari-Regular">
+            NotoSansDevanagari-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" postScriptName="NotoSansDevanagari-Regular">
+            NotoSansDevanagari-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" postScriptName="NotoSansDevanagari-Regular">
+            NotoSansDevanagari-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" postScriptName="NotoSansDevanagari-Regular">
+            NotoSansDevanagari-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+        <font weight="400" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifDevanagari-Regular">NotoSerifDevanagari-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifDevanagari-Regular">NotoSerifDevanagari-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifDevanagari-Regular">NotoSerifDevanagari-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" fallbackFor="serif"
+              postScriptName="NotoSerifDevanagari-Regular">NotoSerifDevanagari-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+    </family>
+    <family lang="und-Deva" variant="compact">
+        <font weight="400" style="normal" postScriptName="NotoSansDevanagariUI-Regular">
+            NotoSansDevanagariUI-VF.ttf
+            <axis tag="wght" stylevalue="400"/>
+        </font>
+        <font weight="500" style="normal" postScriptName="NotoSansDevanagariUI-Regular">
+            NotoSansDevanagariUI-VF.ttf
+            <axis tag="wght" stylevalue="500"/>
+        </font>
+        <font weight="600" style="normal" postScriptName="NotoSansDevanagariUI-Regular">
+            NotoSansDevanagariUI-VF.ttf
+            <axis tag="wght" stylevalue="600"/>
+        </font>
+        <font weight="700" style="normal" postScriptName="NotoSansDevanagariUI-Regular">
+            NotoSansDevanagariUI-VF.ttf
+            <axis tag="wght" stylevalue="700"/>
+        </font>
+    </family>
+
