@@ -1,0 +1,6 @@
+id=nees_chargelimit
+name=Charge Limit (80%)
+version=v1
+versionCode=1
+author=nees
+description=Stops charging at PAUSE% and resumes at RESUME% via qcom-battery/usb_charger_en. Edit /data/adb/chargelimit.conf to change.
