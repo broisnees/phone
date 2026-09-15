@@ -106,3 +106,29 @@ public class Hooks implements IXposedHookLoadPackage {
      * the batched broadcast queue and arrives late on fast presses; this foreground broadcast,
      * sent from the volume controller itself, lands in a few ms.
      */
+    private static void notifyGlyph(Context ctx, int level, int max) {
+        try {
+            ctx.sendBroadcast(new android.content.Intent("com.nees.glyph.LEVEL")
+                    .setPackage("com.nees.glyph")
+                    .addFlags(android.content.Intent.FLAG_RECEIVER_FOREGROUND)
+                    .putExtra("level", level)
+                    .putExtra("max", Math.max(max, 1)));
+        } catch (Throwable ignored) { }
+    }
+
+    /** Selection tick per step; a single success tap on reaching max or min, not repeated while held there. */
+    private static void volumeStep(int stream, long gap, String why) {
+        Context ctx = AndroidAppHelper.currentApplication();
+        if (ctx == null) return;
+        AudioManager am = ctx.getSystemService(AudioManager.class);
+        int level = am.getStreamVolume(stream);
+        notifyGlyph(ctx, level, am.getStreamMaxVolume(stream));
+        int prev = lastLevel.get(stream, Integer.MIN_VALUE);
+        lastLevel.put(stream, level);
+        if (level == prev) return; // pressing against a limit
+        boolean boundary = level >= am.getStreamMaxVolume(stream) || level <= am.getStreamMinVolume(stream);
+        fire(boundary ? SUCCESS : SELECTION, null, gap, why + (boundary ? " limit" : ""));
+    }
+
+    // ---------------------------------------------------------------- Launcher
+
