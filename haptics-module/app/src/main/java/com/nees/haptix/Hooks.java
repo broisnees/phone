@@ -31,3 +31,24 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * Only state-change hooks are used — never per-frame expansion, scroll or draw callbacks.
  * Back gesture is left alone: Nothing's BackPanelController already vibrates on arm/commit.
  */
+public class Hooks implements IXposedHookLoadPackage {
+    private static final String TAG = "Haptix: ";
+
+    private static final int SELECTION = HapticFeedbackConstants.CLOCK_TICK;
+    private static final int IMPACT = HapticFeedbackConstants.VIRTUAL_KEY;
+    private static final int SUCCESS = HapticFeedbackConstants.CONFIRM;
+
+    private static final long GAP = 120;        // between unrelated haptics
+    private static final long KEY_REPEAT_GAP = 60; // volume key auto-repeat
+    private static final long SLIDER_GAP = 80;  // volume panel drag detents
+
+    // AOSP ShadeExpansionStateManager panel states.
+    private static final int STATE_CLOSED = 0;
+    private static final int STATE_OPEN = 2;
+
+    private static long lastFire;
+    private static boolean hooked;
+    private static Vibrator vibrator;
+    private static Method vibratorFeedback; // hidden Vibrator#performHapticFeedback, used when no View is at hand
+    private static final SparseIntArray lastLevel = new SparseIntArray();
+
