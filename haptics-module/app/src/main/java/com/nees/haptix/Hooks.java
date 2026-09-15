@@ -132,3 +132,42 @@ public class Hooks implements IXposedHookLoadPackage {
 
     // ---------------------------------------------------------------- Launcher
 
+    private void hookLauncher(ClassLoader cl) {
+        Class<?> itemInfo = XposedHelpers.findClassIfExists("com.android.launcher3.model.data.ItemInfo", cl);
+        if (itemInfo != null) {
+            // Every icon tap (workspace, dock, app drawer, search) funnels through here.
+            hook(cl, "com.android.launcher3.Launcher", "startActivitySafely",
+                    new Object[]{View.class, android.content.Intent.class, itemInfo},
+                    before(p -> fire(IMPACT, (View) p.args[0], GAP, "app launch")));
+        }
+
+        XC_MethodHook folder = before(p -> fire(IMPACT, (View) p.thisObject, GAP, "folder open"));
+        hook(cl, "com.android.launcher3.folder.Folder", "animateOpen", new Object[]{}, folder);
+        hook(cl, "com.android.launcher3.folder.Folder", "animateOpen", new Object[]{java.util.List.class, int.class}, folder);
+
+        // Swipe-up destination decided once on release.
+        Class<?> endTarget = XposedHelpers.findClassIfExists("com.android.quickstep.GestureState$GestureEndTarget", cl);
+        if (endTarget != null) {
+            hook(cl, "com.android.quickstep.AbsSwipeUpHandler", "animateToProgress",
+                    new Object[]{float.class, float.class, long.class, android.view.animation.Interpolator.class, endTarget, android.graphics.PointF.class},
+                    before(p -> {
+                        Object target = p.args[4];
+                        if (target == null) return;
+                        String name = ((Enum<?>) target).name();
+                        View v = viewField(p.thisObject, "mRecentsView");
+                        if ("HOME".equals(name)) fire(SUCCESS, v, GAP, "gesture home");
+                        else if ("RECENTS".equals(name)) fire(SELECTION, v, GAP, "gesture recents");
+                    }));
+        }
+
+        // Recents carousel settling on a card (not workspace page swipes).
+        Class<?> recents = XposedHelpers.findClassIfExists("com.android.quickstep.views.RecentsView", cl);
+        if (recents != null) {
+            hook(cl, "com.android.launcher3.PagedView", "onPageEndTransition", new Object[]{}, after(p -> {
+                if (recents.isInstance(p.thisObject)) fire(SELECTION, (View) p.thisObject, GAP, "recents snap");
+            }));
+        }
+    }
+
+    // ---------------------------------------------------------------- helpers
+
