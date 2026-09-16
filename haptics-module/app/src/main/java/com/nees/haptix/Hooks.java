@@ -198,3 +198,53 @@ public class Hooks implements IXposedHookLoadPackage {
         }
     }
 
+    private static void hook(ClassLoader cl, String cls, String method, Object[] params, XC_MethodHook cb) {
+        try {
+            Object[] all = new Object[params.length + 1];
+            System.arraycopy(params, 0, all, 0, params.length);
+            all[params.length] = cb;
+            XposedHelpers.findAndHookMethod(cls, cl, method, all);
+            log("hooked " + cls.substring(cls.lastIndexOf('.') + 1) + "." + method + "/" + params.length);
+        } catch (Throwable t) {
+            log("FAILED " + cls + "." + method + "/" + params.length + ": " + t.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Plays a HapticFeedbackConstants effect. Prefers View#performHapticFeedback (system-tuned,
+     * follows the user's touch intensity); without a view uses the hidden Vibrator equivalent,
+     * and as a last resort the matching predefined effect on the touch usage.
+     */
+    private static void fire(int constant, View view, long gap, String why) {
+        long now = SystemClock.uptimeMillis();
+        if (now - lastFire < gap) return;
+        lastFire = now;
+        try {
+            if (view != null && view.isAttachedToWindow()
+                    && view.performHapticFeedback(constant, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)) {
+                log("fired " + why);
+                return;
+            }
+            Context ctx = AndroidAppHelper.currentApplication();
+            if (ctx == null) return;
+            if (Settings.System.getInt(ctx.getContentResolver(), Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) == 0) return;
+            if (vibrator == null) {
+                vibrator = ctx.getSystemService(Vibrator.class);
+                vibratorFeedback = findVibratorFeedback();
+            }
+            if (vibrator == null) return;
+            if (vibratorFeedback != null) {
+                Object[] args = vibratorFeedback.getParameterCount() == 4
+                        ? new Object[]{constant, false, "haptix", false}
+                        : new Object[]{constant, false, "haptix", false, false};
+                vibratorFeedback.invoke(vibrator, args);
+            } else {
+                int effect = constant == SELECTION ? VibrationEffect.EFFECT_TICK : VibrationEffect.EFFECT_CLICK;
+                vibrator.vibrate(VibrationEffect.createPredefined(effect), VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH));
+            }
+            log("fired " + why);
+        } catch (Throwable t) {
+            log("play failed: " + t);
+        }
+    }
+
