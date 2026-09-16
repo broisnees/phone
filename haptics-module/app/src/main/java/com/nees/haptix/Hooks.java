@@ -171,3 +171,30 @@ public class Hooks implements IXposedHookLoadPackage {
 
     // ---------------------------------------------------------------- helpers
 
+    private interface Body { void run(XC_MethodHook.MethodHookParam p) throws Throwable; }
+
+    private static XC_MethodHook before(Body b) {
+        return new XC_MethodHook() {
+            @Override protected void beforeHookedMethod(MethodHookParam p) {
+                try { b.run(p); } catch (Throwable t) { log("hook error: " + t); }
+            }
+        };
+    }
+
+    private static XC_MethodHook after(Body b) {
+        return new XC_MethodHook() {
+            @Override protected void afterHookedMethod(MethodHookParam p) {
+                try { b.run(p); } catch (Throwable t) { log("hook error: " + t); }
+            }
+        };
+    }
+
+    private static View viewField(Object o, String field) {
+        try {
+            Object v = XposedHelpers.getObjectField(o, field);
+            return v instanceof View ? (View) v : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
