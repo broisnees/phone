@@ -248,3 +248,19 @@ public class Hooks implements IXposedHookLoadPackage {
         }
     }
 
+    private static Method findVibratorFeedback() {
+        for (Method m : Vibrator.class.getMethods()) {
+            if (!m.getName().equals("performHapticFeedback")) continue;
+            Class<?>[] ps = m.getParameterTypes();
+            if (ps.length >= 4 && ps[0] == int.class && ps[1] == boolean.class && ps[2] == String.class && ps[3] == boolean.class) {
+                if (ps.length == 4 || (ps.length == 5 && ps[4] == boolean.class)) return m;
+            }
+        }
+        log("Vibrator#performHapticFeedback not available, using predefined effects");
+        return null;
+    }
+
+    private static void log(String msg) {
+        XposedBridge.log(TAG + msg);
+    }
+}
