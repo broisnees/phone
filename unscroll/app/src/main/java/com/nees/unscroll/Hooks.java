@@ -63,3 +63,83 @@ public class Hooks implements IXposedHookLoadPackage {
     private long lastBack;
     private boolean labelResolved;
 
+    private static Set<String> set(String... s) { return new HashSet<>(Arrays.asList(s)); }
+
+    private static void log(String msg) { XposedBridge.log("Unscroll: " + msg); }
+
+    @Override
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
+        if (!lpparam.packageName.equals(lpparam.processName)) return; // main UI process only
+        pkg = lpparam.packageName;
+        if (!pkg.equals(YT) && !pkg.equals(IG) && !pkg.equals(FB)) return;
+
+        try {
+            XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam p) { safeCheck((View) p.thisObject); }
+            });
+            log("hooked View.onAttachedToWindow in " + pkg);
+        } catch (Throwable t) { log("attach hook failed: " + t); }
+
+        try {
+            // Litho/Compose often set labels after attach.
+            XposedHelpers.findAndHookMethod(View.class, "setContentDescription", CharSequence.class, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam p) {
+                    View v = (View) p.thisObject;
+                    if (p.args[0] != null && v.isAttachedToWindow()) safeCheck(v);
+                }
+            });
+            log("hooked View.setContentDescription in " + pkg);
+        } catch (Throwable t) { log("description hook failed: " + t); }
+
+        try {
+            XposedHelpers.findAndHookMethod(View.class, "setVisibility", int.class, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam p) {
+                    if (!hidden.isEmpty() && hidden.contains(p.thisObject)) p.args[0] = View.GONE;
+                }
+            });
+        } catch (Throwable t) { log("visibility hook failed: " + t); }
+
+        try {
+            XC_MethodHook rewrite = new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam p) {
+                    try {
+                        Activity a = (Activity) p.thisObject;
+                        Intent i = p.method.getName().equals("onNewIntent") ? (Intent) p.args[0] : a.getIntent();
+                        rewriteIntent(i);
+                    } catch (Throwable t) { log("intent rewrite failed: " + t); }
+                }
+            };
+            XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, rewrite);
+            XposedHelpers.findAndHookMethod(Activity.class, "onNewIntent", Intent.class, rewrite);
+            log("hooked Activity intents in " + pkg);
+        } catch (Throwable t) { log("activity hook failed: " + t); }
+    }
+
+    /** youtube.com/shorts/ID → watch?v=ID; the "open Shorts" launcher shortcut → plain launch. */
+    private void rewriteIntent(Intent i) {
+        if (i == null) return;
+        if (pkg.equals(YT)) {
+            if ("com.google.android.youtube.action.open.shorts".equals(i.getAction())) {
+                i.setAction(Intent.ACTION_MAIN);
+                log("blocked Shorts shortcut");
+            }
+            Uri d = i.getData();
+            if (d != null && d.getPath() != null && d.getPath().startsWith("/shorts/")) {
+                String id = d.getPath().substring("/shorts/".length()).split("/")[0];
+                if (!id.isEmpty()) {
+                    i.setData(Uri.parse("https://www.youtube.com/watch?v=" + id));
+                    log("rewrote Shorts link to normal player: " + id);
+                }
+            }
+        } else if (pkg.equals(IG)) {
+            Uri d = i.getData();
+            if (d != null && d.getPath() != null && (d.getPath().startsWith("/reel/") || d.getPath().startsWith("/reels/"))) {
+                String id = d.getPath().split("/").length > 2 ? d.getPath().split("/")[2] : "";
+                if (!id.isEmpty()) {
+                    i.setData(Uri.parse("https://www.instagram.com/p/" + id + "/"));
+                    log("rewrote Reel link to post view: " + id);
+                }
+            }
+        }
+    }
+
