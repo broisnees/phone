@@ -191,3 +191,53 @@ public class Hooks implements IXposedHookLoadPackage {
         } catch (Throwable ignored) { }
     }
 
+    private String entryName(View v) {
+        int id = v.getId();
+        if (id == View.NO_ID || (id >>> 24) != 0x7f) return null;
+        String cached = names.get(id);
+        if (cached == null) {
+            try { cached = v.getResources().getResourceEntryName(id); } catch (Throwable t) { cached = ""; }
+            names.put(id, cached);
+        }
+        return cached.isEmpty() ? null : cached;
+    }
+
+    private boolean hasAncestorNamed(View v, String target, int depth) {
+        ViewParent p = v.getParent();
+        for (int i = 0; i < depth && p instanceof View; i++, p = p.getParent()) {
+            if (target.equals(entryName((View) p))) return true;
+        }
+        return false;
+    }
+
+    /** Collapse a view so its siblings re-flow into the space (tab bars re-space evenly). */
+    private void hide(View v, String what) {
+        if (hidden.contains(v)) return;
+        hidden.add(v);
+        v.setVisibility(View.GONE);
+        ViewGroup.LayoutParams lp = v.getLayoutParams();
+        if (lp instanceof LinearLayout.LayoutParams) ((LinearLayout.LayoutParams) lp).weight = 0f;
+        if (lp != null) { lp.width = 0; v.setLayoutParams(lp); }
+        log("hid " + what);
+    }
+
+    /** Hide the RecyclerView row containing [v] (a shelf header or chip). */
+    private void hideFeedItem(View v, String what) {
+        View row = v;
+        ViewParent p = v.getParent();
+        for (int i = 0; i < 12 && p instanceof View; i++) {
+            if (p.getClass().getName().endsWith("RecyclerView")) {
+                if (collapsedRows.containsKey(row)) return;
+                ViewGroup.LayoutParams lp = row.getLayoutParams();
+                collapsedRows.put(row, lp != null ? lp.height : ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (lp != null) { lp.height = 0; row.setLayoutParams(lp); }
+                row.setVisibility(View.GONE);
+                log("hid " + what);
+                return;
+            }
+            row = (View) p;
+            p = p.getParent();
+        }
+        hide(v, what);
+    }
+
