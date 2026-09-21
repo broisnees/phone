@@ -268,3 +268,29 @@ public class Hooks implements IXposedHookLoadPackage {
         backUntilGone(a, v, what, 0);
     }
 
+    private void backUntilGone(Activity a, View v, String what, int attempt) {
+        v.postDelayed(() -> {
+            try {
+                if (attempt > 0 && !v.isAttachedToWindow()) return;
+                if (attempt >= 3) { log("gave up closing " + what); return; }
+                a.onBackPressed();
+                log("blocked " + what + (attempt > 0 ? " (retry " + attempt + ")" : ""));
+                backUntilGone(a, v, what, attempt + 1);
+            } catch (Throwable t) { log("back failed: " + t); }
+        }, attempt == 0 ? 0 : 350);
+    }
+
+    /** Swallow touches on pagers/recyclers inside a player so reels can't be swiped through. */
+    private void lockScroll(View v, int depth) {
+        if (depth > 4) return;
+        String cls = v.getClass().getName();
+        if (cls.contains("ViewPager") || cls.endsWith("RecyclerView")) {
+            v.setOnTouchListener((x, e) -> true);
+            try { v.getClass().getMethod("setUserInputEnabled", boolean.class).invoke(v, false); } catch (Throwable ignored) { }
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) lockScroll(g.getChildAt(i), depth + 1);
+        }
+    }
+
