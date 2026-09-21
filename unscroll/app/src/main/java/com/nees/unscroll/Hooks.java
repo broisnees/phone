@@ -241,3 +241,30 @@ public class Hooks implements IXposedHookLoadPackage {
         hide(v, what);
     }
 
+    private void restore(View row, int height) {
+        ViewGroup.LayoutParams lp = row.getLayoutParams();
+        if (lp != null) { lp.height = height; row.setLayoutParams(lp); }
+        row.setVisibility(View.VISIBLE);
+    }
+
+    /**
+     * Leave a Shorts/Reels player: lock its swiping first (so nothing can be scrolled even for a
+     * frame), then close it. A dedicated screen (e.g. a reel opened from a DM) is finished outright;
+     * inside the main tab activity we press back, re-checking up to 3 times until the player is gone.
+     */
+    private void leave(View v, String what) {
+        lockScroll(v, 0);
+        long now = SystemClock.uptimeMillis();
+        if (now - lastBack < BACK_DEBOUNCE_MS) return;
+        Activity a = activityOf(v.getContext());
+        if (a == null) return;
+        lastBack = now;
+        boolean main = a.getClass().getName().endsWith("MainTabActivity") || a.getClass().getName().endsWith("MainActivity")
+            || a.getClass().getName().endsWith("WatchWhileActivity");
+        if (!main) {
+            v.post(() -> { try { a.finish(); log("closed " + what + " (" + a.getClass().getSimpleName() + ")"); } catch (Throwable t) { log("finish failed: " + t); } });
+            return;
+        }
+        backUntilGone(a, v, what, 0);
+    }
+
