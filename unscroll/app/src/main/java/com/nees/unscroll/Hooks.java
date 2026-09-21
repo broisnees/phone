@@ -294,3 +294,12 @@ public class Hooks implements IXposedHookLoadPackage {
         }
     }
 
+    private static Activity activityOf(Context c) {
+        for (int i = 0; i < 8 && c != null; i++) {
+            if (c instanceof Activity) return (Activity) c;
+            if (!(c instanceof ContextWrapper)) return null;
+            c = ((ContextWrapper) c).getBaseContext();
+        }
+        return null;
+    }
+}
