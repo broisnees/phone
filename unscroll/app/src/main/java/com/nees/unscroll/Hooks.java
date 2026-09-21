@@ -143,3 +143,51 @@ public class Hooks implements IXposedHookLoadPackage {
         }
     }
 
+    private void safeCheck(View v) {
+        try { check(v); } catch (Throwable t) { /* never break the host app */ }
+    }
+
+    private void check(View v) {
+        if (!labelResolved) resolveLabel(v);
+        Integer oldHeight = collapsedRows.remove(v);
+        if (oldHeight != null) restore(v, oldHeight);
+        String name = entryName(v);
+        CharSequence descCs = v.getContentDescription();
+        String desc = descCs == null ? null : descCs.toString().trim();
+
+        switch (pkg) {
+            case YT:
+                if (name != null && YT_PLAYER.contains(name)) { leave(v, "Shorts player"); return; }
+                if (desc != null && desc.toLowerCase(Locale.ROOT).equals(shortsLabel)) {
+                    if (hasAncestorNamed(v, "pivot_bar", 6)) hide(v, "Shorts tab");
+                    else hideFeedItem(v, "Shorts shelf/chip");
+                }
+                break;
+            case IG:
+                if (name != null && IG_TABS.contains(name)) { hide(v, "Reels tab"); return; }
+                if (name == null) break;
+                if (IG_PLAYER.contains(name) || name.startsWith("clips_viewer") || IG_FEEDS.contains(name)) { leave(v, "Reels viewer (" + name + ")"); return; }
+                if (IG_SHELVES.contains(name)) { hideFeedItem(v, "Reels shelf (" + name + ")"); return; }
+                // Learn unknown reel surfaces: log each distinct clips_* id once so the next build can target it.
+                if (name.startsWith("clips_") && !name.startsWith("clips_editor") && seenIds.add(name)) {
+                    Activity a = activityOf(v.getContext());
+                    log("seen " + name + " in " + (a == null ? "?" : a.getClass().getSimpleName()));
+                }
+                break;
+            case FB:
+                if (desc != null && FB_TAB.matcher(desc).matches()) hide(v, "Reels/Video tab (" + desc + ")");
+                break;
+        }
+    }
+
+    /** YouTube's own (possibly localized) "Shorts" string. */
+    private void resolveLabel(View v) {
+        labelResolved = true;
+        if (!pkg.equals(YT)) return;
+        try {
+            Resources r = v.getContext().getResources();
+            int id = r.getIdentifier("shorts", "string", YT);
+            if (id != 0) shortsLabel = r.getString(id).toLowerCase(Locale.ROOT);
+        } catch (Throwable ignored) { }
+    }
+
