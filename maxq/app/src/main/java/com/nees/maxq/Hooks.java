@@ -208,3 +208,39 @@ public class Hooks implements IXposedHookLoadPackage, IXposedHookZygoteInit {
      * when the player is on Auto, or once for each new list (new video). A quality the user picks
      * by hand on the same video is left alone.
      */
+    private void onQualities(Object setterInstance, Object[] qualities, int index) throws Throwable {
+        if (qualities == null || qualities.length == 0) return;
+        int best = -1, bestRes = 0;
+        for (int i = 0; i < qualities.length; i++) {
+            int res = resolutionOf(qualities[i]);
+            String name = nameOf(qualities[i]);
+            if (res <= 0 || (name != null && name.contains("Premium"))) continue; // Premium needs a subscription
+            if (res > bestRes) { bestRes = res; best = i; }
+        }
+        if (best < 0) return;
+        int currentRes = index >= 0 && index < qualities.length ? resolutionOf(qualities[index]) : AUTO;
+        if (currentRes == bestRes) return;
+
+        boolean onAuto = currentRes == AUTO || currentRes <= 0;
+        boolean newList = lastApplied.get() != qualities;
+        if (!onAuto && !newList) return;
+        long now = SystemClock.uptimeMillis();
+        if (now - lastApplyAt < 300) return;
+        lastApplyAt = now;
+        lastApplied = new WeakReference<>(qualities);
+
+        Object listener = listenerField.get(setterInstance);
+        Object menu = listener == null ? null : menuField.get(listener);
+        if (menu == null) { log("menu not ready yet"); return; }
+        final Object target = qualities[best];
+        final String label = nameOf(target);
+        final String from = index >= 0 && index < qualities.length ? nameOf(qualities[index]) : "Auto";
+        if (main == null) main = new Handler(Looper.getMainLooper());
+        main.post(() -> {
+            try {
+                setQuality.invoke(menu, target);
+                log("set " + label + " (was " + from + ")");
+            } catch (Throwable t) { log("setQuality failed: " + t); }
+        });
+    }
+
