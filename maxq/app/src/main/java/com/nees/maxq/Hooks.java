@@ -37,3 +37,37 @@ import org.luckypray.dexkit.result.UsingFieldData;
  *    a quality exactly as tapping it in the quality menu does.
  * Everything is located by fingerprint with DexKit and cached until YouTube's APK changes.
  */
+public class Hooks implements IXposedHookLoadPackage, IXposedHookZygoteInit {
+    private static String modulePath;
+    private static final String YT = "com.google.android.youtube";
+    private static final String QUALITY_STRING = "menu_item_video_quality";
+    private static final int AUTO = -2;
+
+    /** Created lazily: the module is constructed before the app's main looper exists. */
+    private Handler main;
+
+    private Field listenerField;      // F, on the setter class
+    private Field menuField;          // G, on the listener's class
+    private Method setQuality;        // Y(VideoQuality), on G's type
+    private Field resolutionField;    // VideoQuality int
+    private Field nameField;          // VideoQuality String
+
+    private WeakReference<Object[]> lastApplied = new WeakReference<>(null);
+    private long lastApplyAt;
+
+    private static void log(String msg) { XposedBridge.log("MaxQ: " + msg); }
+
+    @Override
+    public void initZygote(StartupParam startupParam) { modulePath = startupParam.modulePath; }
+
+    /** Vector's in-memory module class loader doesn't search the module's lib dir; load by path. */
+    private static void loadDexKit() {
+        try { System.loadLibrary("dexkit"); return; } catch (Throwable ignored) { }
+        String dir = new File(modulePath).getParent();
+        for (String abi : new String[] {"arm64", "arm64-v8a"}) {
+            File so = new File(dir, "lib/" + abi + "/libdexkit.so");
+            if (so.exists()) { System.load(so.getAbsolutePath()); return; }
+        }
+        throw new UnsatisfiedLinkError("libdexkit.so not found next to " + modulePath);
+    }
+
