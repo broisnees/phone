@@ -244,3 +244,28 @@ public class Hooks implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         });
     }
 
+    private int resolutionOf(Object q) throws IllegalAccessException {
+        int res = resolutionField.getInt(q);
+        // YouTube sometimes stores a wrong resolution; the label ("1080p60", "720p") is authoritative.
+        String name = nameOf(q);
+        if (name != null && res != AUTO && !name.startsWith(Integer.toString(res))) {
+            int p = name.indexOf('p');
+            if (p > 0) {
+                try { return Integer.parseInt(name.substring(0, p)); } catch (NumberFormatException ignored) { }
+            }
+        }
+        return res;
+    }
+
+    private String nameOf(Object q) {
+        try { return nameField == null ? null : (String) nameField.get(q); } catch (Throwable t) { return null; }
+    }
+
+    // ------------------------------------------------------------ cache
+
+    private static Properties load(File f) {
+        Properties p = new Properties();
+        if (f.exists()) try (FileInputStream in = new FileInputStream(f)) { p.load(in); } catch (Throwable ignored) { }
+        return p;
+    }
+
