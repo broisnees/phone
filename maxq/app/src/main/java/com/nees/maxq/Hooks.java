@@ -269,3 +269,7 @@ public class Hooks implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         return p;
     }
 
+    private static void save(File f, Properties p) {
+        try (FileOutputStream out = new FileOutputStream(f)) { p.store(out, "MaxQ fingerprint cache"); } catch (Throwable t) { log("cache write failed: " + t); }
+    }
+}
