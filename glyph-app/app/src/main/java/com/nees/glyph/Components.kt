@@ -31,3 +31,22 @@ class GlyphApp : Application() {
 class NotifListener : NotificationListenerService() {
     override fun onListenerConnected() = recount()
 
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        recount()
+        val n = sbn.notification
+        if (sbn.isOngoing || n.flags and Notification.FLAG_GROUP_SUMMARY != 0 || sbn.packageName == packageName) return
+        // Updates to an existing "alert once" notification (progress, media) must not flash again.
+        val firstPost = seen.add(sbn.key)
+        if (!firstPost && n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0) return
+        val settings = Settings(this)
+        if (!settings.notifications) return
+        val id = settings.appPattern(sbn.packageName) ?: settings.defaultNotifPattern
+        if (id == "off") return
+        settings.pattern(id)?.let { Engine.play(Layer.Notification, it) }
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        seen.remove(sbn.key)
+        recount()
+    }
+
