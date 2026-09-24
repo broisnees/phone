@@ -74,3 +74,23 @@ class BootReceiver : BroadcastReceiver() {
 
 // ---------------------------------------------------------------- Quick Settings tiles
 
+class TorchTile : TileService() {
+    override fun onStartListening() { update() }
+
+    override fun onClick() {
+        val svc = GlyphService.instance
+        if (svc != null) svc.setTorch(!Engine.isActive(Layer.Torch)) else GlyphService.start(this, GlyphService.ACTION_TORCH)
+        qsTile?.let { it.state = if (Engine.isActive(Layer.Torch)) Tile.STATE_INACTIVE else Tile.STATE_ACTIVE; it.updateTile() }
+    }
+
+    private fun update() {
+        val tile = qsTile ?: return
+        tile.state = if (Engine.isActive(Layer.Torch)) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.updateTile()
+    }
+
+    companion object {
+        fun refresh(ctx: Context) = requestListeningState(ctx, ComponentName(ctx, TorchTile::class.java))
+    }
+}
+
