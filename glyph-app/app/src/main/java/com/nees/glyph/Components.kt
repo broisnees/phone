@@ -94,3 +94,30 @@ class TorchTile : TileService() {
     }
 }
 
+class BatteryTile : TileService() {
+    override fun onClick() {
+        GlyphService.instance?.showBattery(3000) ?: GlyphService.start(this, GlyphService.ACTION_BATTERY)
+    }
+}
+
+class TimerTile : TileService() {
+    override fun onStartListening() {
+        qsTile?.let {
+            val on = GlyphService.timerEnd > 0
+            it.state = if (on) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+            it.subtitle = if (on) "Running" else "${Settings(this).timerMinutes} min"
+            it.updateTile()
+        }
+    }
+
+    override fun onClick() {
+        val svc = GlyphService.instance
+        if (svc == null) GlyphService.start(this, GlyphService.ACTION_TIMER)
+        else if (GlyphService.timerEnd > 0) svc.cancelTimer() else svc.startTimer(Settings(this).timerMinutes)
+        onStartListening()
+    }
+
+    companion object {
+        fun refresh(ctx: Context) = requestListeningState(ctx, ComponentName(ctx, TimerTile::class.java))
+    }
+}
