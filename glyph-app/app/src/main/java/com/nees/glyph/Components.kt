@@ -50,3 +50,27 @@ class NotifListener : NotificationListenerService() {
         recount()
     }
 
+    private val seen = HashSet<String>()
+
+    private fun recount() {
+        unread = runCatching { activeNotifications.count { !it.isOngoing && it.packageName != packageName && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 } }
+            .getOrDefault(0)
+        GlyphService.instance?.updateAmbient()
+    }
+
+    companion object {
+        @Volatile var unread = 0
+            private set
+
+        fun component(ctx: Context) = ComponentName(ctx, NotifListener::class.java)
+    }
+}
+
+class BootReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        if (Settings(ctx).anyFeature()) GlyphService.start(ctx)
+    }
+}
+
+// ---------------------------------------------------------------- Quick Settings tiles
+
