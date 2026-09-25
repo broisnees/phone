@@ -27,3 +27,47 @@ object Engine {
     /** Called whenever the set of active layers changes. */
     @Volatile var onActiveChanged: ((Set<Layer>) -> Unit)? = null
 
+    fun set(layer: Layer, source: Source?) = handler.post {
+        sources[layer.ordinal] = source
+        notifyActive()
+        // Draw the new state now rather than on the next 33 ms tick, so key presses feel instant.
+        render()
+        if (source != null) start()
+    }
+
+    fun clear(layer: Layer) = set(layer, null)
+
+    fun isActive(layer: Layer) = sources[layer.ordinal] != null
+
+    /** Play [pattern] once (or looped until cleared). */
+    fun play(layer: Layer, pattern: Pattern, loop: Boolean = false) {
+        if (pattern.steps.isEmpty()) return
+        val start = SystemClock.uptimeMillis()
+        val total = pattern.duration.coerceAtLeast(1)
+        set(layer) { now ->
+            val t = now - start
+            if (!loop && t >= total) null else {
+                var rem = (t % total).toInt()
+                var frame = pattern.steps.last().levels
+                for (s in pattern.steps) {
+                    if (rem < s.ms) { frame = s.levels; break }
+                    rem -= s.ms
+                }
+                frame
+            }
+        }
+    }
+
+    /** Hold a frame for [ms], fading out over the last 300 ms. */
+    fun flash(layer: Layer, frame: IntArray, ms: Long) {
+        val end = SystemClock.uptimeMillis() + ms
+        set(layer) { now ->
+            val left = end - now
+            when {
+                left <= 0 -> null
+                left >= 300 -> frame
+                else -> IntArray(frame.size) { (frame[it] * left / 300).toInt() }
+            }
+        }
+    }
+
