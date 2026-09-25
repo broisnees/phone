@@ -71,3 +71,36 @@ object Engine {
         }
     }
 
+    private fun start() {
+        if (running) return
+        running = true
+        handler.post(tick)
+    }
+
+    private val tick = object : Runnable {
+        override fun run() {
+            render()
+            if (sources.any { it != null }) handler.postDelayed(this, 33) else running = false
+        }
+    }
+
+    private fun render() {
+        val now = SystemClock.uptimeMillis()
+        var frame: IntArray? = null
+        var torch = false
+        for (i in sources.indices.reversed()) {
+            val src = sources[i] ?: continue
+            val f = runCatching { src(now) }.getOrNull()
+            if (f == null) { sources[i] = null; notifyActive(); continue }
+            frame = f
+            torch = i == Layer.Torch.ordinal
+            break
+        }
+        val scale = if (torch) torchLevel else ceiling
+        val out = IntArray(Zone.COUNT) { z -> ((frame?.getOrNull(z) ?: 0) * scale * Hw.MAX / 10_000) }
+        if (!out.contentEquals(lastFrame)) {
+            Hw.write(out)
+            lastFrame = out
+        }
+    }
+
