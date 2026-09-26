@@ -74,3 +74,46 @@ class GlyphService : Service() {
         super.onDestroy()
     }
 
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> main.post { apply() } }
+
+    /** Reconcile registrations with the current settings. */
+    fun apply() {
+        Engine.ceiling = if (faceDown) 100 else settings.brightness
+        Engine.torchLevel = settings.torchLevel
+        toggle("vol", settings.volumeIndicator, ::volumeOn, ::volumeOff)
+        toggle("bright", settings.brightnessIndicator, ::brightnessOn, ::brightnessOff)
+        toggle("calls", settings.calls, ::callsOn, ::callsOff)
+        toggle("charge", settings.chargingMeter, ::chargeOn, ::chargeOff)
+        toggle("viz", settings.visualizer, ::vizOn, ::vizOff)
+        toggle("flip", settings.faceDown, ::flipOn, ::flipOff)
+        updateAmbient()
+        if (!settings.anyFeature() && !Engine.isActive(Layer.Torch) && timerEnd == 0L) stopSelf()
+    }
+
+    private val enabled = HashSet<String>()
+    private fun toggle(key: String, on: Boolean, start: () -> Unit, stop: () -> Unit) {
+        if (on && enabled.add(key)) runCatching(start).onFailure { Log.w(TAG, "start failed", it) }
+        if (!on && enabled.remove(key)) runCatching(stop)
+    }
+
+    private fun disableAll() {
+        volumeOff(); brightnessOff(); callsOff(); chargeOff(); vizOff(); flipOff()
+        enabled.clear()
+    }
+
+    // ================================================================ Volume & brightness indicator
+
+    /** Set when Haptix's instant per-step signal is arriving; the slower system broadcast is then ignored. */
+    @Volatile private var lastFastLevelAt = 0L
+
+    /** Instant path: Haptix sends the level from SystemUI's volume controller on each step. */
+    private val fastVolumeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, i: Intent) {
+            val level = i.getIntExtra("level", -1)
+            val max = i.getIntExtra("max", 1).coerceAtLeast(1)
+            if (level < 0) return
+            lastFastLevelAt = android.os.SystemClock.uptimeMillis()
+            showLevel(level.toFloat() / max)
+        }
+    }
+
