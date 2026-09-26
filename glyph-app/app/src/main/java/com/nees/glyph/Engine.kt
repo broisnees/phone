@@ -124,3 +124,5 @@ object Engine {
         return f
     }
 
+    fun frame(vararg on: Pair<Zone, Int>) = IntArray(Zone.COUNT).also { a -> on.forEach { (z, v) -> a[z.ordinal] = v } }
+}
