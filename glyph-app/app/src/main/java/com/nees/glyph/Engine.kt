@@ -104,3 +104,23 @@ object Engine {
         }
     }
 
+    private fun notifyActive() {
+        onActiveChanged?.invoke(Layer.entries.filter { sources[it.ordinal] != null }.toSet())
+    }
+
+    // ---------------------------------------------------------------- frame helpers
+
+    /** Bottom strip filled to [fraction] (0–1); the partial top segment is dimmed proportionally. */
+    fun stripLevel(fraction: Float, level: Int = 100): IntArray {
+        val f = IntArray(Zone.COUNT)
+        val lit = fraction.coerceIn(0f, 1f) * Zone.strip.size
+        Zone.strip.forEachIndexed { i, z ->
+            f[z.ordinal] = when {
+                lit >= i + 1 -> level
+                lit > i -> (level * (lit - i)).toInt()
+                else -> 0
+            }
+        }
+        return f
+    }
+
