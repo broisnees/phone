@@ -231,3 +231,38 @@ class GlyphService : Service() {
 
     // ================================================================ Timer
 
+    fun startTimer(minutes: Int) {
+        val total = minutes * 60_000L
+        timerEnd = SystemClock.uptimeMillis() + total
+        Engine.set(Layer.Timer) { now ->
+            val left = timerEnd - now
+            if (left <= 0) {
+                timerEnd = 0
+                main.post {
+                    settings.pattern("double")?.let { Engine.play(Layer.Notification, Pattern("done", "Done", List(3) { _ -> it.steps }.flatten())) }
+                    TimerTile.refresh(this)
+                    apply()
+                }
+                null
+            } else Engine.stripLevel(left.toFloat() / total, 40)
+        }
+        TimerTile.refresh(this)
+    }
+
+    fun cancelTimer() {
+        timerEnd = 0
+        Engine.clear(Layer.Timer)
+        TimerTile.refresh(this)
+        apply()
+    }
+
+    // ================================================================ Torch
+
+    fun setTorch(on: Boolean) {
+        if (on) Engine.set(Layer.Torch) { IntArray(Zone.COUNT) { 100 } } else Engine.clear(Layer.Torch)
+        TorchTile.refresh(this)
+        if (!on) main.post { apply() }
+    }
+
+    // ================================================================ Music visualizer
+
