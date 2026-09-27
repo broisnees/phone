@@ -152,3 +152,40 @@ class GlyphService : Service() {
         }
     }
 
+    private fun brightnessOn() {
+        lastBrightness = SysSettings.System.getInt(contentResolver, SysSettings.System.SCREEN_BRIGHTNESS, -1)
+        contentResolver.registerContentObserver(SysSettings.System.getUriFor(SysSettings.System.SCREEN_BRIGHTNESS), false, brightnessObserver)
+    }
+
+    private fun brightnessOff() { contentResolver.unregisterContentObserver(brightnessObserver) }
+
+    /** Level on the bottom strip for 1.5 s, then a 300 ms fade. */
+    private fun showLevel(fraction: Float, pulseRing: Boolean = false) {
+        val f = Engine.stripLevel(fraction)
+        if (pulseRing) Zone.ring.forEach { f[it.ordinal] = 25 }
+        Engine.flash(Layer.Indicator, f, 1500)
+    }
+
+    // ================================================================ Calls
+
+    private val callReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, i: Intent) {
+            when (i.getStringExtra(TelephonyManager.EXTRA_STATE)) {
+                TelephonyManager.EXTRA_STATE_RINGING -> {
+                    // The broadcast arrives twice; only the copy with the number carries caller identity.
+                    val number = i.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER) ?: return
+                    val pattern = settings.pattern(contactKey(number)?.let(settings::contactPattern) ?: settings.defaultCallPattern)
+                    if (pattern != null) Engine.play(Layer.Call, pattern, loop = true)
+                }
+                else -> Engine.clear(Layer.Call)
+            }
+        }
+    }
+
+    private fun contactKey(number: String): String? = runCatching {
+        val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
+        contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.LOOKUP_KEY), null, null, null)?.use {
+            if (it.moveToFirst()) it.getString(0) else null
+        }
+    }.getOrNull()
+
