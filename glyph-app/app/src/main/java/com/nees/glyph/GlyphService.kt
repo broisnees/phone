@@ -117,3 +117,38 @@ class GlyphService : Service() {
         }
     }
 
+    private val volumeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, i: Intent) {
+            // Stale copies of steps the fast path already showed would flicker an older level.
+            if (android.os.SystemClock.uptimeMillis() - lastFastLevelAt < 3000) return
+            val stream = i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", AudioManager.STREAM_MUSIC)
+            val value = i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_VALUE", -1)
+            val prev = i.getIntExtra("android.media.EXTRA_PREV_VOLUME_STREAM_VALUE", -1)
+            if (value < 0 || value == prev) return
+            val maxV = audio.getStreamMaxVolume(stream).coerceAtLeast(1)
+            showLevel(value.toFloat() / maxV)
+        }
+    }
+
+    private fun volumeOn() {
+        registerReceiver(volumeReceiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"), RECEIVER_NOT_EXPORTED)
+        // Exported so SystemUI (Haptix) can reach it; the payload can only light the strip.
+        registerReceiver(fastVolumeReceiver, IntentFilter("com.nees.glyph.LEVEL"), RECEIVER_EXPORTED)
+    }
+
+    private fun volumeOff() {
+        runCatching { unregisterReceiver(volumeReceiver) }
+        runCatching { unregisterReceiver(fastVolumeReceiver) }
+    }
+
+    private var lastBrightness = -1
+    private val brightnessObserver = object : ContentObserver(main) {
+        override fun onChange(selfChange: Boolean) {
+            if (!power.isInteractive) return
+            val v = SysSettings.System.getInt(contentResolver, SysSettings.System.SCREEN_BRIGHTNESS, -1)
+            if (v < 0 || v == lastBrightness) return
+            lastBrightness = v
+            showLevel(v / 255f, pulseRing = true)
+        }
+    }
+
