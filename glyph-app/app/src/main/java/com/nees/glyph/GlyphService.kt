@@ -189,3 +189,45 @@ class GlyphService : Service() {
         }
     }.getOrNull()
 
+    private fun callsOn() { registerReceiver(callReceiver, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED)) }
+    private fun callsOff() { runCatching { unregisterReceiver(callReceiver) }; Engine.clear(Layer.Call) }
+
+    // ================================================================ Charging meter & battery
+
+    private var lastPct = -1
+    private var plugged = false
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, i: Intent) {
+            val pct = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100 / i.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+            val nowPlugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+            val justPlugged = nowPlugged && !plugged
+            plugged = nowPlugged
+            if (justPlugged || (plugged && pct != lastPct && lastPct >= 0)) showBattery(2500, pct)
+            lastPct = pct
+        }
+    }
+
+    private fun chargeOn() {
+        plugged = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    }
+
+    private fun chargeOff() { runCatching { unregisterReceiver(batteryReceiver) } }
+
+    /** Battery % on the strip; while charging the next segment breathes. */
+    fun showBattery(ms: Long, pctArg: Int = -1) {
+        val pct = if (pctArg >= 0) pctArg else getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val charging = getSystemService(BatteryManager::class.java).isCharging
+        val base = Engine.stripLevel(pct / 100f)
+        val next = Zone.strip.getOrNull((pct * Zone.strip.size / 100).coerceAtMost(Zone.strip.lastIndex))
+        val end = SystemClock.uptimeMillis() + ms
+        Engine.set(Layer.Meter) { now ->
+            if (now >= end) null else base.copyOf().also { f ->
+                if (charging && next != null) f[next.ordinal] = (50 + 50 * sin(now / 300.0)).toInt()
+                f[Zone.E.ordinal] = if (charging) 100 else 0
+            }
+        }
+    }
+
+    // ================================================================ Timer
+
