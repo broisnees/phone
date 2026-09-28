@@ -28,3 +28,30 @@ enum class Zone(val label: String, val hw: Int) {
  * Writes LED brightness through one long-lived root shell. Only channels whose value changed
  * are written, so a static frame costs nothing and a visualizer frame touches a handful of LEDs.
  */
+object Hw {
+    private const val NODE = "/sys/class/leds/aw210xx_led/single_led_br"
+    const val MAX = 4095
+
+    private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "glyph-hw").apply { isDaemon = true } }
+    private var shell: Process? = null
+    private var writer: OutputStreamWriter? = null
+    private val last = IntArray(Zone.COUNT) { -1 }
+
+    @Volatile var available = true; private set
+
+    /** [levels] are 0..4095 per [Zone] ordinal. */
+    fun write(levels: IntArray) {
+        val frame = levels.copyOf()
+        io.execute {
+            val sb = StringBuilder()
+            for (i in 0 until Zone.COUNT) {
+                val v = frame[i].coerceIn(0, MAX)
+                if (v != last[i]) {
+                    sb.append("echo '").append(Zone.entries[i].hw).append(' ').append(v).append("' > ").append(NODE).append('\n')
+                    last[i] = v
+                }
+            }
+            if (sb.isNotEmpty()) send(sb.toString())
+        }
+    }
+
