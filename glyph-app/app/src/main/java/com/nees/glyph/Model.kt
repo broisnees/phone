@@ -19,3 +19,37 @@ data class Step(val levels: IntArray, val ms: Int) {
     override fun hashCode() = 31 * levels.contentHashCode() + ms
 }
 
+data class Pattern(val id: String, val name: String, val steps: List<Step>) {
+    val duration get() = steps.sumOf { it.ms }
+
+    fun toJson() = JSONObject().put("id", id).put("name", name).put("steps", JSONArray(steps.map { it.toJson() }))
+
+    companion object {
+        fun fromJson(o: JSONObject) = Pattern(
+            o.getString("id"), o.getString("name"),
+            o.getJSONArray("steps").let { a -> List(a.length()) { Step.fromJson(a.getJSONObject(it)) } },
+        )
+    }
+}
+
+object Presets {
+    private val ring = Zone.ring
+    private val strip = Zone.strip
+
+    val all: List<Pattern> = listOf(
+        Pattern("pulse", "Pulse", listOf(Step.all(180, 100), Step.all(220, 0))),
+        Pattern("double", "Double tap", listOf(Step.all(110, 100), Step.all(110, 0), Step.all(110, 100), Step.all(250, 0))),
+        Pattern("halo", "Halo", listOf(Step.all(220, 100, ring), Step.all(180, 40, ring), Step.all(220, 100, ring), Step.all(250, 0))),
+        Pattern("sweep", "Ring sweep", ring.map { Step.of(90, it to 100) } + Step.all(120, 0)),
+        Pattern("rise", "Strip rise", strip.indices.map { i -> Step.all(45, 100, strip.take(i + 1)) } + Step.all(160, 0)),
+        Pattern("comet", "Comet", listOf(Step.of(90, Zone.A to 100), Step.of(90, Zone.B to 100)) + ring.map { Step.of(70, it to 100) } +
+            strip.reversed().map { Step.of(35, it to 100) } + Step.of(120, Zone.E to 100) + Step.all(100, 0)),
+        Pattern("heart", "Heartbeat", listOf(Step.all(120, 100, ring + Zone.E), Step.all(90, 15, ring), Step.all(140, 100, ring + Zone.E), Step.all(450, 0))),
+        Pattern("camera", "Camera blink", listOf(Step.of(150, Zone.A to 100), Step.all(150, 0), Step.of(150, Zone.A to 100), Step.all(250, 0))),
+    )
+}
+
+/** All settings, persisted in one SharedPreferences file. */
+class Settings(ctx: Context) {
+    private val p: SharedPreferences = ctx.getSharedPreferences("glyph", Context.MODE_PRIVATE)
+
