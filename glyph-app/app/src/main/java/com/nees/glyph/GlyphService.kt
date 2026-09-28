@@ -266,3 +266,36 @@ class GlyphService : Service() {
 
     // ================================================================ Music visualizer
 
+    private var viz: Visualizer? = null
+    private val vizFrame = IntArray(Zone.COUNT)
+    private var bassAvg = 0f
+    private var peak = 1f
+    private var smoothed = 0f
+
+    private val vizPoll = object : Runnable {
+        override fun run() {
+            val playing = audio.isMusicActive
+            if (playing && viz == null) startCapture()
+            if (!playing && viz != null) stopCapture()
+            main.postDelayed(this, 1500)
+        }
+    }
+
+    private fun vizOn() { main.post(vizPoll) }
+    private fun vizOff() { main.removeCallbacks(vizPoll); stopCapture() }
+
+    private fun startCapture() {
+        val v = runCatching { Visualizer(0) }.onFailure { Log.w(TAG, "Visualizer unavailable", it) }.getOrNull() ?: return
+        runCatching {
+            v.enabled = false
+            v.captureSize = 1024.coerceIn(Visualizer.getCaptureSizeRange()[0], Visualizer.getCaptureSizeRange()[1])
+            v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
+                override fun onWaveFormDataCapture(vis: Visualizer?, waveform: ByteArray?, rate: Int) = Unit
+                override fun onFftDataCapture(vis: Visualizer?, fft: ByteArray?, rate: Int) { if (fft != null) analyse(fft, vis?.samplingRate ?: 44_100_000) }
+            }, (Visualizer.getMaxCaptureRate() / 2).coerceAtMost(30_000), false, true)
+            v.enabled = true
+        }.onFailure { Log.w(TAG, "Visualizer setup failed", it); v.release(); return }
+        viz = v
+        Engine.set(Layer.Visualizer) { vizFrame }
+    }
+
