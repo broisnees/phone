@@ -299,3 +299,109 @@ class GlyphService : Service() {
         Engine.set(Layer.Visualizer) { vizFrame }
     }
 
+    private fun stopCapture() {
+        viz?.let { runCatching { it.enabled = false; it.release() } }
+        viz = null
+        Engine.clear(Layer.Visualizer)
+    }
+
+    /** Bass drives the strip and the ring beat, mids the diagonal, highs the camera glyph. */
+    private fun analyse(fft: ByteArray, samplingRateMilliHz: Int) {
+        val n = fft.size / 2
+        val hzPerBin = samplingRateMilliHz / 1000f / fft.size
+        fun band(lo: Float, hi: Float): Float {
+            val a = (lo / hzPerBin).toInt().coerceIn(1, n - 1)
+            val b = (hi / hzPerBin).toInt().coerceIn(a + 1, n)
+            var sum = 0f
+            for (k in a until b) sum += hypot(fft[2 * k].toFloat(), fft[2 * k + 1].toFloat())
+            return sum / (b - a)
+        }
+        val bass = band(40f, 160f)
+        val mid = band(400f, 2000f)
+        val high = band(4000f, 12000f)
+        // Auto-gain: follow the loudest recent bass so quiet and loud tracks both fill the strip.
+        peak = max(bass, peak * 0.995f).coerceAtLeast(4f)
+        val gain = 0.5f + settings.vizGain / 100f
+        val level = (bass / peak * gain).coerceIn(0f, 1f)
+        smoothed = max(level, smoothed * 0.82f)
+        val beat = bass > bassAvg * 1.45f && bass > peak * 0.45f
+        bassAvg = bassAvg * 0.9f + bass * 0.1f
+
+        val f = Engine.stripLevel(smoothed)
+        val ring = if (beat) 100 else (smoothed * 40).toInt()
+        Zone.ring.forEach { f[it.ordinal] = ring }
+        f[Zone.B.ordinal] = ((mid / peak) * 120 * gain).toInt().coerceIn(0, 100)
+        f[Zone.A.ordinal] = ((high / peak) * 260 * gain).toInt().coerceIn(0, 100)
+        f.copyInto(vizFrame)
+    }
+
+    // ================================================================ Ambient + face-down
+
+    @Volatile private var faceDown = false
+    private var downSince = 0L
+    private val sensors by lazy { getSystemService(SensorManager::class.java) }
+    private val flipListener = object : SensorEventListener {
+        override fun onSensorChanged(e: SensorEvent) {
+            val z = e.values[2]
+            val down = z < -8.5f
+            val now = SystemClock.uptimeMillis()
+            if (down) { if (downSince == 0L) downSince = now } else downSince = 0
+            val state = down && now - downSince > 800
+            if (state != faceDown) { faceDown = state; main.post { apply() } }
+        }
+        override fun onAccuracyChanged(s: Sensor?, a: Int) = Unit
+    }
+
+    private fun flipOn() { sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { sensors.registerListener(flipListener, it, SensorManager.SENSOR_DELAY_NORMAL) } }
+    private fun flipOff() { sensors.unregisterListener(flipListener); faceDown = false }
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, i: Intent) = updateAmbient()
+    }
+
+    /** Unread notifications breathe on the ring while the screen is off (always when face down). */
+    fun updateAmbient() {
+        val want = (settings.ambient || (settings.faceDown && faceDown)) && !power.isInteractive && NotifListener.unread > 0
+        if (want && !Engine.isActive(Layer.Ambient)) {
+            Engine.set(Layer.Ambient) { now ->
+                val b = (12 + 38 * (0.5 + 0.5 * sin(now * 2 * PI / 3000))).toInt()
+                IntArray(Zone.COUNT).also { f -> Zone.ring.forEach { f[it.ordinal] = b } }
+            }
+        } else if (!want) Engine.clear(Layer.Ambient)
+    }
+
+    // ================================================================ Notification
+
+    private fun buildNotification(): Notification {
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        return Notification.Builder(this, GlyphApp.CH_SERVICE)
+            .setSmallIcon(R.drawable.ic_glyph)
+            .setContentTitle("Glyph Tweaks is running")
+            .setContentIntent(open)
+            .setOngoing(true)
+            .build()
+    }
+
+    companion object {
+        private const val TAG = "Glyph"
+        private const val NOTIF_ID = 7
+        const val ACTION_TORCH = "com.nees.glyph.TORCH"
+        const val ACTION_BATTERY = "com.nees.glyph.BATTERY"
+        const val ACTION_TIMER = "com.nees.glyph.TIMER"
+
+        @Volatile var instance: GlyphService? = null
+            private set
+        @Volatile var timerEnd = 0L
+            private set
+
+        fun start(ctx: Context, action: String? = null) {
+            runCatching { ctx.startForegroundService(Intent(ctx, GlyphService::class.java).setAction(action)) }
+                .onFailure { Log.w(TAG, "could not start service", it) }
+        }
+
+        /** Start when any feature is on; otherwise stop. */
+        fun sync(ctx: Context) {
+            if (Settings(ctx).anyFeature()) start(ctx) else instance?.apply()
+        }
+    }
+}
