@@ -55,3 +55,38 @@ object Hw {
         }
     }
 
+    fun off() = write(IntArray(Zone.COUNT))
+
+    /** Forget cached values (e.g. after Nothing's own Glyph used the LEDs) so the next frame is fully written. */
+    fun invalidate() = io.execute { last.fill(-1) }
+
+    private fun send(cmd: String) {
+        try {
+            val w = writer ?: open() ?: return
+            w.write(cmd)
+            w.flush()
+        } catch (t: Throwable) {
+            Log.w("Glyph", "root shell died, reopening", t)
+            close()
+            try { (open() ?: return).apply { write(cmd); flush() } } catch (_: Throwable) { available = false }
+        }
+    }
+
+    private fun open(): OutputStreamWriter? = try {
+        val p = ProcessBuilder("su").redirectErrorStream(true).start()
+        // Drain output so the pipe never blocks.
+        Thread { runCatching { p.inputStream.copyTo(java.io.OutputStream.nullOutputStream()) } }.apply { isDaemon = true }.start()
+        shell = p
+        OutputStreamWriter(p.outputStream).also { writer = it; available = true }
+    } catch (t: Throwable) {
+        available = false
+        null
+    }
+
+    private fun close() {
+        runCatching { writer?.close() }
+        runCatching { shell?.destroy() }
+        writer = null
+        shell = null
+    }
+}
