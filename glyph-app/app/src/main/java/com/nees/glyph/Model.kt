@@ -53,3 +53,23 @@ object Presets {
 class Settings(ctx: Context) {
     private val p: SharedPreferences = ctx.getSharedPreferences("glyph", Context.MODE_PRIVATE)
 
+    private fun bool(k: String, d: Boolean = false) = p.getBoolean(k, d)
+    private fun setBool(k: String, v: Boolean) = p.edit().putBoolean(k, v).apply()
+
+    var notifications get() = bool("notif"); set(v) = setBool("notif", v)
+    var calls get() = bool("calls"); set(v) = setBool("calls", v)
+    var visualizer get() = bool("viz"); set(v) = setBool("viz", v)
+    var chargingMeter get() = bool("charge"); set(v) = setBool("charge", v)
+    var volumeIndicator get() = bool("vol"); set(v) = setBool("vol", v)
+    var brightnessIndicator get() = bool("bright"); set(v) = setBool("bright", v)
+    var ambient get() = bool("ambient"); set(v) = setBool("ambient", v)
+    var faceDown get() = bool("flip"); set(v) = setBool("flip", v)
+
+    /** Global ceiling for every effect, 0–100. */
+    var brightness get() = p.getInt("level", 70); set(v) = p.edit().putInt("level", v).apply()
+    var torchLevel get() = p.getInt("torch", 100); set(v) = p.edit().putInt("torch", v).apply()
+    var vizGain get() = p.getInt("vizGain", 60); set(v) = p.edit().putInt("vizGain", v).apply()
+    var timerMinutes get() = p.getInt("timer", 5); set(v) = p.edit().putInt("timer", v).apply()
+    var defaultNotifPattern get() = p.getString("defNotif", "pulse")!!; set(v) = p.edit().putString("defNotif", v).apply()
+    var defaultCallPattern get() = p.getString("defCall", "comet")!!; set(v) = p.edit().putString("defCall", v).apply()
+
