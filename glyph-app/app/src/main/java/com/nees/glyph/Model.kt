@@ -73,3 +73,35 @@ class Settings(ctx: Context) {
     var defaultNotifPattern get() = p.getString("defNotif", "pulse")!!; set(v) = p.edit().putString("defNotif", v).apply()
     var defaultCallPattern get() = p.getString("defCall", "comet")!!; set(v) = p.edit().putString("defCall", v).apply()
 
+    fun anyFeature() = notifications || calls || visualizer || chargingMeter || volumeIndicator || brightnessIndicator || ambient || faceDown
+
+    // ---- per-app and per-contact patterns: key → pattern id ("" = use default, "off" = none)
+    fun appPattern(pkg: String): String? = p.getString("app:$pkg", null)
+    fun setAppPattern(pkg: String, id: String?) = p.edit().apply { if (id == null) remove("app:$pkg") else putString("app:$pkg", id) }.apply()
+    fun appsWithPatterns(): Map<String, String> =
+        p.all.filterKeys { it.startsWith("app:") }.mapKeys { it.key.removePrefix("app:") }.mapValues { it.value as String }
+
+    fun contactPattern(key: String): String? = p.getString("contact:$key", null)
+    fun setContactPattern(key: String, id: String?) = p.edit().apply { if (id == null) remove("contact:$key") else putString("contact:$key", id) }.apply()
+
+    // ---- custom patterns
+    fun customPatterns(): List<Pattern> = runCatching {
+        val a = JSONArray(p.getString("patterns", "[]"))
+        List(a.length()) { Pattern.fromJson(a.getJSONObject(it)) }
+    }.getOrDefault(emptyList())
+
+    fun savePattern(pattern: Pattern) {
+        val list = customPatterns().filterNot { it.id == pattern.id } + pattern
+        p.edit().putString("patterns", JSONArray(list.map { it.toJson() }).toString()).apply()
+    }
+
+    fun deletePattern(id: String) {
+        p.edit().putString("patterns", JSONArray(customPatterns().filterNot { it.id == id }.map { it.toJson() }).toString()).apply()
+    }
+
+    fun allPatterns() = Presets.all + customPatterns()
+    fun pattern(id: String?): Pattern? = allPatterns().firstOrNull { it.id == id }
+
+    fun listen(l: SharedPreferences.OnSharedPreferenceChangeListener) = p.registerOnSharedPreferenceChangeListener(l)
+    fun unlisten(l: SharedPreferences.OnSharedPreferenceChangeListener) = p.unregisterOnSharedPreferenceChangeListener(l)
+}
