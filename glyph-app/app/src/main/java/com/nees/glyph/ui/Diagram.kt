@@ -58,3 +58,53 @@ private fun anchor(z: Zone): Offset = when (z) {
  * The 15 Glyph zones drawn as on the phone's back. [levels] are percent per zone; zones light up
  * white with a soft glow. Tapping a zone calls [onZone].
  */
+@Composable
+fun GlyphDiagram(levels: IntArray, modifier: Modifier = Modifier, onZone: ((Zone) -> Unit)? = null) {
+    Canvas(
+        modifier.aspectRatio(ASPECT).then(
+            if (onZone == null) Modifier else Modifier.pointerInput(Unit) {
+                detectTapGestures { p ->
+                    val fx = p.x / size.width
+                    val fy = p.y / size.height
+                    // Distance in width units: a height-fraction is 1/ASPECT width-fractions long.
+                    val hit = Zone.entries.minByOrNull { z -> anchor(z).let { hypot((it.x - fx).toDouble(), ((it.y - fy) / ASPECT).toDouble()) } }
+                    if (hit != null) onZone(hit)
+                }
+            },
+        ),
+    ) {
+        val w = size.width
+        val h = size.height
+        // Body.
+        drawRoundRect(Color(0xFF0E0E10), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.12f))
+        drawRoundRect(Color(0x14FFFFFF), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.12f), style = Stroke(1.5f))
+        // Camera module (not a glyph, just context).
+        drawCircle(Color(0xFF1C1C1F), radius = w * 0.085f, center = Offset(Geo.camera.x * w - w * 0.03f, Geo.camera.y * h - h * 0.012f))
+
+        val stroke = w * 0.035f
+        fun color(z: Zone) = levels.getOrElse(z.ordinal) { 0 }.let { if (it <= 0) off else Color.White.copy(alpha = 0.35f + 0.65f * it / 100f) }
+        fun lit(z: Zone) = levels.getOrElse(z.ordinal) { 0 } > 0
+
+        // A: camera arc.
+        val camR = Geo.cameraR * w
+        drawGlowArc(lit(Zone.A), color(Zone.A), Offset(Geo.camera.x * w, Geo.camera.y * h), camR, -60f, 200f, stroke)
+        // B: diagonal.
+        drawGlowLine(lit(Zone.B), color(Zone.B), Offset(Geo.diagA.x * w, Geo.diagA.y * h), Offset(Geo.diagB.x * w, Geo.diagB.y * h), stroke)
+        // C: ring quarters.
+        Zone.ring.forEachIndexed { i, z ->
+            drawGlowArc(lit(z), color(z), Offset(Geo.ring.x * w, Geo.ring.y * h), Geo.ringR * w, Geo.ringStarts[i], 80f, stroke)
+        }
+        // D: strip, bottom (D1) to top (D8).
+        val seg = (Geo.stripBottom - Geo.stripTop) * h / Zone.strip.size
+        Zone.strip.forEachIndexed { i, z ->
+            val y1 = Geo.stripBottom * h - seg * i - seg * 0.12f
+            val y2 = Geo.stripBottom * h - seg * (i + 1) + seg * 0.12f
+            drawGlowLine(lit(z), color(z), Offset(w / 2, y1), Offset(w / 2, y2), stroke)
+        }
+        // E: dot.
+        val dc = Offset(Geo.dot.x * w, Geo.dot.y * h)
+        if (lit(Zone.E)) drawCircle(color(Zone.E).copy(alpha = 0.25f), radius = stroke * 1.6f, center = dc)
+        drawCircle(color(Zone.E), radius = stroke * 0.7f, center = dc)
+    }
+}
+
