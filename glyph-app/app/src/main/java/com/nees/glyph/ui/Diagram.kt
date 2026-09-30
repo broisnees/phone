@@ -35,3 +35,26 @@ private object Geo {
     val ringStarts = listOf(-85f, 5f, 95f, 185f)
 }
 
+private fun ringArcMid(i: Int): Float = Geo.ringStarts[i] + 40f
+
+/** Anchor point used for tap hit-testing, in fractions. */
+private fun anchor(z: Zone): Offset = when (z) {
+    Zone.A -> Offset(Geo.camera.x + Geo.cameraR * 0.9f, Geo.camera.y + Geo.cameraR * 0.4f)
+    Zone.B -> Offset((Geo.diagA.x + Geo.diagB.x) / 2, (Geo.diagA.y + Geo.diagB.y) / 2)
+    Zone.E -> Geo.dot
+    in Zone.ring -> {
+        val a = Math.toRadians(ringArcMid(Zone.ring.indexOf(z)).toDouble())
+        // The ring is a true circle in pixels, so its y-offset in height-fractions shrinks by the aspect ratio.
+        Offset(Geo.ring.x + Geo.ringR * cos(a).toFloat(), Geo.ring.y + Geo.ringR * sin(a).toFloat() * ASPECT)
+    }
+    else -> {
+        val i = Zone.strip.indexOf(z)
+        val seg = (Geo.stripBottom - Geo.stripTop) / Zone.strip.size
+        Offset(0.5f, Geo.stripBottom - seg * (i + 0.5f))
+    }
+}
+
+/**
+ * The 15 Glyph zones drawn as on the phone's back. [levels] are percent per zone; zones light up
+ * white with a soft glow. Tapping a zone calls [onZone].
+ */
