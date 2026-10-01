@@ -162,3 +162,77 @@ fun TalkTheme(content: @Composable () -> Unit) {
  * One meaning, one feeling (Apple/Pixel vocabulary), all clear system effects that follow the
  * user's intensity setting. Ordinary scrolling and row taps get nothing.
  */
+object Haptic {
+    /** Lightest: tabs, chips, toggles, swipe threshold. */
+    const val SELECT = HapticFeedbackConstants.CLOCK_TICK
+    /** Keys on the dial pad. */
+    const val KEY = HapticFeedbackConstants.KEYBOARD_TAP
+    /** Light impact: opening something. */
+    const val LIGHT = HapticFeedbackConstants.VIRTUAL_KEY
+    /** Success: send, call, copy. */
+    const val SUCCESS = HapticFeedbackConstants.CONFIRM
+    /** Destructive / end call. */
+    const val REJECT = HapticFeedbackConstants.REJECT
+    const val LONG = HapticFeedbackConstants.LONG_PRESS
+    const val NONE = -1
+}
+
+@Composable
+fun rememberHaptics(): (Int) -> Unit {
+    val view = LocalView.current
+    return remember(view) { { kind: Int -> if (kind != Haptic.NONE) view.performHapticFeedback(kind) } }
+}
+
+// ============================================================ Press feedback
+
+/** Shrinks to 0.96 while held (120 ms ease-out), fires its haptic on release. */
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.pressable(
+    haptic: Int = Haptic.LIGHT,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+): Modifier = composed {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, tween(120, easing = EaseOut), label = "press")
+    val view = LocalView.current
+    graphicsLayer { scaleX = scale; scaleY = scale }.combinedClickable(
+        interactionSource = source,
+        indication = null,
+        onLongClick = onLongClick?.let { { view.performHapticFeedback(Haptic.LONG); it() } },
+        onClick = { if (haptic != Haptic.NONE) view.performHapticFeedback(haptic); onClick() },
+    )
+}
+
+/** Rows inside cards: the fill brightens while held instead of scaling. No haptic (restraint). */
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.rowPress(
+    base: Color = C.card,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+): Modifier = composed {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val color by animateColorAsState(if (pressed) C.pressed else base, tween(100), label = "row")
+    val view = LocalView.current
+    background(color).combinedClickable(
+        interactionSource = source,
+        indication = null,
+        onLongClick = onLongClick?.let { { view.performHapticFeedback(Haptic.LONG); it() } },
+        onClick = onClick,
+    )
+}
+
+// ============================================================ Cards
+
+/** Shape for the i-th of n rows that together form one card in a lazy list. */
+fun sliceShape(i: Int, n: Int): Shape = when {
+    n == 1 -> RoundedCornerShape(Radius.card)
+    i == 0 -> RoundedCornerShape(topStart = Radius.card, topEnd = Radius.card)
+    i == n - 1 -> RoundedCornerShape(bottomStart = Radius.card, bottomEnd = Radius.card)
+    else -> RoundedCornerShape(0.dp)
+}
+
+/** Places a row as slice [i] of an [n]-row card. */
+fun Modifier.cardSlice(i: Int, n: Int): Modifier = padding(horizontal = S.edge).clip(sliceShape(i, n))
+
