@@ -108,3 +108,14 @@ fun GlyphDiagram(levels: IntArray, modifier: Modifier = Modifier, onZone: ((Zone
     }
 }
 
+private fun DrawScope.drawGlowArc(lit: Boolean, c: Color, center: Offset, r: Float, start: Float, sweep: Float, stroke: Float) {
+    val tl = Offset(center.x - r, center.y - r)
+    val sz = Size(r * 2, r * 2)
+    if (lit) drawArc(c.copy(alpha = c.alpha * 0.25f), start, sweep, false, tl, sz, style = Stroke(stroke * 2.6f, cap = StrokeCap.Round))
+    drawArc(c, start, sweep, false, tl, sz, style = Stroke(stroke, cap = StrokeCap.Round))
+}
+
+private fun DrawScope.drawGlowLine(lit: Boolean, c: Color, a: Offset, b: Offset, stroke: Float) {
+    if (lit) drawLine(c.copy(alpha = c.alpha * 0.25f), a, b, stroke * 2.6f, StrokeCap.Round)
+    drawLine(c, a, b, stroke, StrokeCap.Round)
+}
