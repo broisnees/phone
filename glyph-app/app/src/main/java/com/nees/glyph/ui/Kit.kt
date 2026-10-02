@@ -344,3 +344,51 @@ fun ActionTile(
 
 // ============================================================ Avatar
 
+private val palette = listOf(
+    Color(0xFF7D7AFF), Color(0xFF5AC8D8), Color(0xFFFF9F45), Color(0xFFFF6B8B),
+    Color(0xFF64B5FF), Color(0xFFC17BFF), Color(0xFF5FD38A), Color(0xFFD4B483),
+)
+
+/** Stable per-name hue, so a person keeps their colour everywhere. */
+fun hueFor(name: String): Color = palette[(name.hashCode() and Int.MAX_VALUE) % palette.size]
+
+@Composable
+fun Avatar(name: String, photo: String?, size: Dp = S.avatar) {
+    val ctx = LocalContext.current
+    val bitmap by produceState<android.graphics.Bitmap?>(null, photo) {
+        value = photo?.let { p ->
+            withContext(Dispatchers.IO) {
+                runCatching { ctx.contentResolver.openInputStream(Uri.parse(p))?.use(BitmapFactory::decodeStream) }.getOrNull()
+            }
+        }
+    }
+    val hue = hueFor(name)
+    Box(
+        Modifier.size(size).clip(CircleShape).background(hue.copy(alpha = 0.18f)).border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        val bmp = bitmap
+        if (bmp != null) {
+            Image(bmp.asImageBitmap(), null, Modifier.size(size), contentScale = ContentScale.Crop)
+        } else {
+            val fs = (size.value * 0.38f).sp
+            Text(initials(name), color = hue, style = T.headline.copy(fontSize = fs, lineHeight = fs, letterSpacing = 0.sp))
+        }
+    }
+}
+
+fun initials(name: String): String {
+    val words = name.split(' ').filter { it.firstOrNull()?.isLetter() == true }
+    return when {
+        words.isEmpty() -> "#"
+        words.size == 1 -> words[0].take(1).uppercase()
+        else -> (words.first().take(1) + words.last().take(1)).uppercase()
+    }
+}
+
+// ============================================================ Swipe row
+
+/**
+ * Horizontal swipe with a revealed action on each side. Crossing the threshold ticks once;
+ * releasing past it (or flicking fast) commits. Drag past the threshold meets friction.
+ */
