@@ -448,3 +448,22 @@ fun SwipeRow(
     }
 }
 
+class SwipeAction(val icon: ImageVector, val label: String, val color: Color, val haptic: Int = Haptic.SUCCESS, val onCommit: () -> Unit)
+
+// ============================================================ Empty state
+
+@Composable
+fun EmptyState(icon: ImageVector, title: String, body: String) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = S.xxl, vertical = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(56.dp).clip(CircleShape).background(C.raised), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = C.text2, modifier = Modifier.size(26.dp))
+        }
+        Spacer(Modifier.height(S.l))
+        Text(title, style = T.headline, color = C.text)
+        Spacer(Modifier.height(S.xs))
+        Text(body, style = T.sub, color = C.text2, maxLines = 3, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+/** Space reserved under lists for the floating tab bar. */
+val TabBarSpace = PaddingValues(bottom = 112.dp)
