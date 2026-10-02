@@ -279,3 +279,68 @@ fun CircleAction(icon: ImageVector, description: String, tint: Color = C.text, h
     ) { Icon(icon, description, tint = tint, modifier = Modifier.size(20.dp)) }
 }
 
+@Composable
+fun SearchBar(query: String, onQuery: (String) -> Unit, placeholder: String) {
+    Row(
+        Modifier.padding(horizontal = S.edge).fillMaxWidth().height(44.dp)
+            .clip(RoundedCornerShape(Radius.field)).background(C.raised).padding(horizontal = S.m + S.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Search, null, tint = C.text2, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(S.s))
+        Box(Modifier.weight(1f)) {
+            if (query.isEmpty()) Text(placeholder, style = T.body, color = C.text3)
+            BasicTextField(
+                query, onQuery, singleLine = true, textStyle = T.body.copy(color = C.text),
+                cursorBrush = SolidColor(C.accent), modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (query.isNotEmpty()) {
+            Icon(Icons.Rounded.Cancel, "Clear", tint = C.text3, modifier = Modifier.size(20.dp).pressable(Haptic.SELECT) { onQuery("") })
+        }
+    }
+}
+
+// ============================================================ Chips & buttons
+
+@Composable
+fun Chip(label: String, selected: Boolean, count: Int = 0, onClick: () -> Unit) {
+    val bg by animateColorAsState(if (selected) C.accent else C.raised, tween(150, easing = EaseOut), label = "chip")
+    val fg by animateColorAsState(if (selected) C.onAccent else C.text2, tween(150, easing = EaseOut), label = "chipText")
+    Row(
+        Modifier.height(32.dp).clip(CircleShape).background(bg).pressable(Haptic.SELECT, onClick = onClick).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = T.sub.copy(fontWeight = FontWeight.Medium), color = fg, maxLines = 1)
+        if (count > 0) {
+            Spacer(Modifier.width(6.dp))
+            Text("$count", style = T.caption.tabular(), color = fg.copy(alpha = 0.7f))
+        }
+    }
+}
+
+/** Tonal action tile: icon over label, used in rows of equal-width actions. */
+@Composable
+fun ActionTile(
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    tint: Color = C.accent,
+    enabled: Boolean = true,
+    haptic: Int = Haptic.LIGHT,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier.clip(RoundedCornerShape(Radius.tile)).background(C.card)
+            .then(if (enabled) Modifier.pressable(haptic, onClick = onClick) else Modifier.graphicsLayer { alpha = 0.4f })
+            .padding(vertical = S.m),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, label, tint = tint, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(label, style = T.caption, color = C.text, maxLines = 1)
+    }
+}
+
+// ============================================================ Avatar
+
