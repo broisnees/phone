@@ -1,0 +1,34 @@
+package com.nees.glyph
+
+import android.Manifest
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import com.nees.glyph.ui.AppsScreen
+import com.nees.glyph.ui.C
+import com.nees.glyph.ui.ContactsScreen
+import com.nees.glyph.ui.EaseOut
+import com.nees.glyph.ui.HomeScreen
+import com.nees.glyph.ui.LightScreen
+import com.nees.glyph.ui.PatternsScreen
+import com.nees.glyph.ui.Screen
+import com.nees.glyph.ui.TalkTheme
+import com.nees.glyph.ui.VisualizerScreen
+
