@@ -236,3 +236,46 @@ fun sliceShape(i: Int, n: Int): Shape = when {
 /** Places a row as slice [i] of an [n]-row card. */
 fun Modifier.cardSlice(i: Int, n: Int): Modifier = padding(horizontal = S.edge).clip(sliceShape(i, n))
 
+@Composable
+fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Column(modifier.padding(horizontal = S.edge).fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(C.card)) { content() }
+}
+
+/** Hairline between rows, inset to where the row's text starts. */
+@Composable
+fun Hairline(start: Dp = S.pad + S.avatar + S.m) {
+    Box(Modifier.fillMaxWidth().background(C.card).padding(start = start, end = S.pad).height(0.5.dp).background(C.hairline))
+}
+
+@Composable
+fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text.uppercase(), style = T.label, color = C.text3,
+        modifier = modifier.fillMaxWidth().background(C.bg)
+            .padding(start = S.edge + S.pad, end = S.edge + S.pad, top = S.xl, bottom = S.s),
+    )
+}
+
+// ============================================================ Header
+
+/** Screen title on the shared edge, with circular actions on the trailing side. */
+@Composable
+fun ScreenTitle(title: String, actions: @Composable () -> Unit = {}) {
+    Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+    Row(
+        Modifier.fillMaxWidth().padding(start = S.edge + S.xs, end = S.edge, top = S.l, bottom = S.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = T.display, color = C.text, modifier = Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(S.s)) { actions() }
+    }
+}
+
+@Composable
+fun CircleAction(icon: ImageVector, description: String, tint: Color = C.text, haptic: Int = Haptic.LIGHT, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).background(C.raised).pressable(haptic, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, description, tint = tint, modifier = Modifier.size(20.dp)) }
+}
+
