@@ -241,3 +241,93 @@ fun HomeScreen(settings: Settings, open: (Screen) -> Unit) {
 
 // ============================================================ Pattern picking
 
+@Composable
+fun PatternPicker(settings: Settings, current: String?, allowDefault: Boolean, onDismiss: () -> Unit, onPick: (String?) -> Unit) {
+    val options = buildList {
+        if (allowDefault) add(null to "Default")
+        add("off" to "Off")
+        settings.allPatterns().forEach { add(it.id to it.name) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = C.raised,
+        title = { Text("Pattern", style = T.headline, color = C.text) },
+        text = {
+            LazyColumn {
+                items(options) { (id, name) ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).rowPress(C.raised) {
+                            settings.pattern(id)?.let { Engine.play(Layer.Indicator, it) }
+                            onPick(id)
+                        }.padding(horizontal = S.m, vertical = S.m),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(name, style = T.body, color = if (id == current) C.accent else C.text, modifier = Modifier.weight(1f))
+                        if (id == current) Text("Selected", style = T.caption, color = C.accent)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onDismiss) { Text("Done", style = T.headline, color = C.accent) } },
+    )
+}
+
+// ============================================================ Apps
+
+private data class AppEntry(val pkg: String, val label: String, val icon: Drawable)
+
+@Composable
+fun AppsScreen(settings: Settings, back: () -> Unit) {
+    val ctx = LocalContext.current
+    rememberSettingsVersion(settings)
+    var query by remember { mutableStateOf("") }
+    var picking by remember { mutableStateOf<String?>(null) }
+    var pickDefault by remember { mutableStateOf(false) }
+    val apps by produceState(emptyList<AppEntry>()) {
+        value = withContext(Dispatchers.IO) {
+            val pm = ctx.packageManager
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), PackageManager.MATCH_ALL)
+                .distinctBy { it.activityInfo.packageName }
+                .filter { it.activityInfo.packageName != ctx.packageName }
+                .map { AppEntry(it.activityInfo.packageName, it.loadLabel(pm).toString(), it.loadIcon(pm)) }
+                .sortedBy { it.label.lowercase() }
+        }
+    }
+    val shown = apps.filter { query.isBlank() || it.label.contains(query, true) }
+    fun name(id: String?) = when (id) { null -> "Default"; "off" -> "Off"; else -> settings.pattern(id)?.name ?: "Default" }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = S.xxl)) {
+        item {
+            Header("App patterns", back)
+            Card { FeatureRow(Icons.Rounded.Notifications, "Default pattern", name(settings.defaultNotifPattern), onOpen = { pickDefault = true }) }
+            Spacer(Modifier.height(S.m))
+            SearchBar(query, { query = it }, "Search apps")
+            Spacer(Modifier.height(S.s))
+        }
+        itemsIndexed(shown, key = { _, a -> a.pkg }) { i, a ->
+            Column(Modifier.cardSlice(i, shown.size)) {
+                Row(
+                    Modifier.fillMaxWidth().rowPress { picking = a.pkg }.padding(horizontal = S.pad, vertical = S.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val bmp = remember(a.pkg) { runCatching { a.icon.toBitmap(96, 96).asImageBitmap() }.getOrNull() }
+                    if (bmp != null) Image(bmp, null, Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)))
+                    Spacer(Modifier.width(S.m))
+                    Text(a.label, style = T.body, color = C.text, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val chosen = settings.appPattern(a.pkg)
+                    Text(name(chosen), style = T.sub, color = if (chosen != null) C.accent else C.text3)
+                }
+                if (i < shown.lastIndex) Hairline(start = S.pad + 36.dp + S.m)
+            }
+        }
+    }
+    picking?.let { pkg ->
+        PatternPicker(settings, settings.appPattern(pkg), allowDefault = true, onDismiss = { picking = null }) { settings.setAppPattern(pkg, it) }
+    }
+    if (pickDefault) {
+        PatternPicker(settings, settings.defaultNotifPattern, allowDefault = false, onDismiss = { pickDefault = false }) { settings.defaultNotifPattern = it ?: "pulse" }
+    }
+}
+
+// ============================================================ Contacts
+
