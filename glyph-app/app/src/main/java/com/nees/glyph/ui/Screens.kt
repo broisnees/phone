@@ -86,3 +86,90 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
+enum class Screen { Home, Apps, Contacts, Visualizer, Light, Patterns }
+
+// ============================================================ Shared bits
+
+@Composable
+fun Header(title: String, onBack: (() -> Unit)? = null, actions: @Composable () -> Unit = {}) {
+    Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+    Row(Modifier.fillMaxWidth().padding(start = S.edge, end = S.edge, top = S.m, bottom = S.s), verticalAlignment = Alignment.CenterVertically) {
+        if (onBack != null) {
+            CircleAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
+            Spacer(Modifier.width(S.m))
+            Text(title, style = T.title, color = C.text, modifier = Modifier.weight(1f))
+        } else {
+            Text(title, style = T.display, color = C.text, modifier = Modifier.weight(1f).padding(start = S.xs))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(S.s)) { actions() }
+    }
+}
+
+@Composable
+fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit) {
+    val haptic = rememberHaptics()
+    Switch(
+        checked, { haptic(Haptic.SELECT); onChange(it) },
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = C.onAccent, checkedTrackColor = C.accent,
+            uncheckedThumbColor = C.text2, uncheckedTrackColor = C.raised, uncheckedBorderColor = C.raised,
+        ),
+    )
+}
+
+@Composable
+fun LevelSlider(label: String, value: Int, range: IntRange = 0..100, suffix: String = "%", onChange: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = S.pad, vertical = S.m)) {
+        Row {
+            Text(label, style = T.body, color = C.text, modifier = Modifier.weight(1f))
+            Text("$value$suffix", style = T.body.tabular(), color = C.text2)
+        }
+        Slider(
+            value.toFloat(), { onChange(it.toInt()) }, valueRange = range.first.toFloat()..range.last.toFloat(),
+            colors = SliderDefaults.colors(thumbColor = C.accent, activeTrackColor = C.accent, inactiveTrackColor = C.raised),
+        )
+    }
+}
+
+/** Card row: icon tile, title + subtitle, then a switch and/or chevron. */
+@Composable
+fun FeatureRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean? = null,
+    onCheck: ((Boolean) -> Unit)? = null,
+    onOpen: (() -> Unit)? = null,
+) {
+    Row(
+        Modifier.fillMaxWidth().then(if (onOpen != null) Modifier.rowPress(onClick = onOpen) else Modifier)
+            .padding(start = S.pad, end = S.m, top = S.m, bottom = S.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(S.avatar).clip(RoundedCornerShape(14.dp)).background(C.raised), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = if (checked == true) C.accent else C.text2, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(S.m))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = T.headline, color = C.text)
+            Text(subtitle, style = T.sub, color = C.text2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        if (checked != null && onCheck != null) Toggle(checked, onCheck)
+        if (onOpen != null && checked == null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = C.text3)
+    }
+}
+
+/** Live settings snapshot that re-reads whenever any preference changes. */
+@Composable
+fun rememberSettingsVersion(settings: Settings): Int {
+    var v by remember { mutableIntStateOf(0) }
+    androidx.compose.runtime.DisposableEffect(settings) {
+        val l = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> v++ }
+        settings.listen(l)
+        onDispose { settings.unlisten(l) }
+    }
+    return v
+}
+
+// ============================================================ Home
+
