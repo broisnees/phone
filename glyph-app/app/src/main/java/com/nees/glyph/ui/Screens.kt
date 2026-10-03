@@ -173,3 +173,71 @@ fun rememberSettingsVersion(settings: Settings): Int {
 
 // ============================================================ Home
 
+@Composable
+fun HomeScreen(settings: Settings, open: (Screen) -> Unit) {
+    val ctx = LocalContext.current
+    rememberSettingsVersion(settings)
+    var preview by remember { mutableStateOf(IntArray(Zone.COUNT)) }
+    var tick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(tick) { if (tick > 0) { delay(600); preview = IntArray(Zone.COUNT) } }
+
+    fun change(block: () -> Unit) { block(); GlyphService.sync(ctx) }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = S.xxl)) {
+        item {
+            Header("Glyph") { CircleAction(Icons.Rounded.Tune, "Patterns", tint = C.accent) { open(Screen.Patterns) } }
+            Card {
+                Row(Modifier.padding(S.pad), verticalAlignment = Alignment.CenterVertically) {
+                    GlyphDiagram(preview, Modifier.width(112.dp)) { z ->
+                        preview = Engine.frame(z to 100)
+                        Engine.flash(Layer.Indicator, Engine.frame(z to 100), 600)
+                        tick++
+                    }
+                    Spacer(Modifier.width(S.l))
+                    Column {
+                        Text("15 zones", style = T.title, color = C.text)
+                        Spacer(Modifier.height(S.xs))
+                        Text("Tap a zone to light it on the back of your phone.", style = T.sub, color = C.text2)
+                    }
+                }
+            }
+            Spacer(Modifier.height(S.s))
+            Card { LevelSlider("Glyph brightness", settings.brightness) { change { settings.brightness = it; Engine.ceiling = it } } }
+        }
+        item {
+            SectionLabel("Light up for")
+            Card {
+                FeatureRow(Icons.Rounded.Notifications, "Notifications", "Pattern per app", settings.notifications, { v -> change { settings.notifications = v } })
+                Hairline(); FeatureRow(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Choose app patterns", "${settings.appsWithPatterns().size} apps customised", onOpen = { open(Screen.Apps) })
+                Hairline(); FeatureRow(Icons.Rounded.Call, "Calls", "Pattern per contact while ringing", settings.calls, { v -> change { settings.calls = v } })
+                Hairline(); FeatureRow(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Choose contact patterns", "Default: ${settings.pattern(settings.defaultCallPattern)?.name ?: "—"}", onOpen = { open(Screen.Contacts) })
+            }
+        }
+        item {
+            SectionLabel("Indicators")
+            Card {
+                FeatureRow(Icons.Rounded.VolumeUp, "Volume level", "Shows on the strip when you press volume", settings.volumeIndicator, { v -> change { settings.volumeIndicator = v } })
+                Hairline(); FeatureRow(Icons.Rounded.BrightnessMedium, "Brightness level", "Shows on the strip when brightness changes", settings.brightnessIndicator, { v -> change { settings.brightnessIndicator = v } })
+                Hairline(); FeatureRow(Icons.Rounded.BatteryChargingFull, "Charging meter", "Battery level on plug-in and as it fills", settings.chargingMeter, { v -> change { settings.chargingMeter = v } })
+            }
+        }
+        item {
+            SectionLabel("Effects")
+            Card {
+                FeatureRow(Icons.Rounded.GraphicEq, "Music visualizer", "Glyphs move with whatever is playing", settings.visualizer, { v -> change { settings.visualizer = v } })
+                Hairline(); FeatureRow(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Visualizer settings", "Sensitivity ${settings.vizGain}%", onOpen = { open(Screen.Visualizer) })
+                Hairline(); FeatureRow(Icons.Rounded.Nightlight, "Ambient glow", "Ring breathes while you have unread notifications", settings.ambient, { v -> change { settings.ambient = v } })
+                Hairline(); FeatureRow(Icons.Rounded.ScreenRotation, "Face-down mode", "Full brightness and ambient ring when face down", settings.faceDown, { v -> change { settings.faceDown = v } })
+            }
+        }
+        item {
+            SectionLabel("Tools")
+            Card {
+                FeatureRow(Icons.Rounded.FlashlightOn, "Glyph light & timer", "Adjustable light, countdown timer, battery check", onOpen = { open(Screen.Light) })
+            }
+        }
+    }
+}
+
+// ============================================================ Pattern picking
+
