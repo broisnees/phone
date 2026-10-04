@@ -390,3 +390,74 @@ fun ContactsScreen(settings: Settings, back: () -> Unit) {
 
 // ============================================================ Visualizer
 
+@Composable
+fun VisualizerScreen(settings: Settings, back: () -> Unit) {
+    val ctx = LocalContext.current
+    rememberSettingsVersion(settings)
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Header("Music visualizer", back)
+            Card {
+                FeatureRow(Icons.Rounded.GraphicEq, "Visualizer", "Runs only while music is playing", settings.visualizer, { settings.visualizer = it; GlyphService.sync(ctx) })
+                Hairline(start = S.pad)
+                LevelSlider("Sensitivity", settings.vizGain) { settings.vizGain = it }
+            }
+            SectionLabel("How it maps")
+            Card {
+                listOf("Bass" to "Bottom strip level, ring pulses on the beat", "Mids" to "Diagonal glyph", "Highs" to "Camera glyph").forEachIndexed { i, (a, b) ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = S.pad, vertical = S.m)) {
+                        Text(a, style = T.headline, color = C.text, modifier = Modifier.width(72.dp))
+                        Text(b, style = T.sub, color = C.text2)
+                    }
+                    if (i < 2) Hairline(start = S.pad)
+                }
+            }
+        }
+    }
+}
+
+// ============================================================ Light, timer, battery
+
+@Composable
+fun LightScreen(settings: Settings, back: () -> Unit) {
+    val ctx = LocalContext.current
+    rememberSettingsVersion(settings)
+    var torch by remember { mutableStateOf(Engine.isActive(Layer.Torch)) }
+    var timerOn by remember { mutableStateOf(GlyphService.timerEnd > 0) }
+    fun service(action: (GlyphService) -> Unit, fallback: String) {
+        GlyphService.instance?.let(action) ?: GlyphService.start(ctx, fallback)
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = S.xxl)) {
+        item {
+            Header("Light & timer", back)
+            Card {
+                FeatureRow(Icons.Rounded.FlashlightOn, "Glyph light", "Every zone as a soft fill light", torch, { on ->
+                    torch = on
+                    service({ it.setTorch(on) }, GlyphService.ACTION_TORCH)
+                })
+                Hairline(start = S.pad)
+                LevelSlider("Light brightness", settings.torchLevel, 5..100) { settings.torchLevel = it; Engine.torchLevel = it }
+            }
+            SectionLabel("Countdown timer")
+            Card {
+                Text("The strip drains as time runs out, then flashes.", style = T.sub, color = C.text2, modifier = Modifier.padding(start = S.pad, end = S.pad, top = S.l))
+                LazyRow(contentPadding = PaddingValues(horizontal = S.pad, vertical = S.m), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+                    items(listOf(1, 3, 5, 10, 15, 25, 45)) { m -> Chip("$m min", settings.timerMinutes == m) { settings.timerMinutes = m } }
+                }
+                FeatureRow(Icons.Rounded.Timer, if (timerOn) "Timer running" else "Start timer", "${settings.timerMinutes} minutes · also in Quick Settings", timerOn, { on ->
+                    timerOn = on
+                    service({ if (on) it.startTimer(settings.timerMinutes) else it.cancelTimer() }, GlyphService.ACTION_TIMER)
+                })
+            }
+            SectionLabel("Battery")
+            Card {
+                FeatureRow(Icons.Rounded.BatteryChargingFull, "Show battery level", "Lights the strip for 3 seconds · also a Quick Settings tile", onOpen = {
+                    service({ it.showBattery(3000) }, GlyphService.ACTION_BATTERY)
+                })
+            }
+        }
+    }
+}
+
+// ============================================================ Patterns + editor
+
