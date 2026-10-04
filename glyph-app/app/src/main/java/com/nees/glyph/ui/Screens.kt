@@ -461,3 +461,126 @@ fun LightScreen(settings: Settings, back: () -> Unit) {
 
 // ============================================================ Patterns + editor
 
+@Composable
+fun PatternsScreen(settings: Settings, back: () -> Unit) {
+    rememberSettingsVersion(settings)
+    var editing by remember { mutableStateOf<Pattern?>(null) }
+    editing?.let { p -> EditorScreen(settings, p) { editing = null }; return }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = S.xxl)) {
+        item {
+            Header("Patterns", back) {
+                CircleAction(Icons.Rounded.Add, "New pattern", tint = C.accent) {
+                    editing = Pattern(UUID.randomUUID().toString(), "My pattern", listOf(Step.all(200, 100), Step.all(200, 0)))
+                }
+            }
+            SectionLabel("Presets")
+        }
+        val presets = com.nees.glyph.Presets.all
+        itemsIndexed(presets, key = { _, p -> p.id }) { i, p ->
+            Column(Modifier.cardSlice(i, presets.size)) {
+                PatternRow(p, onPlay = { Engine.play(Layer.Indicator, p) }, onOpen = { editing = p.copy(id = UUID.randomUUID().toString(), name = "${p.name} copy") })
+                if (i < presets.lastIndex) Hairline(start = S.pad)
+            }
+        }
+        val custom = settings.customPatterns()
+        if (custom.isNotEmpty()) item { SectionLabel("Yours") }
+        itemsIndexed(custom, key = { _, p -> p.id }) { i, p ->
+            Column(Modifier.cardSlice(i, custom.size)) {
+                PatternRow(p, onPlay = { Engine.play(Layer.Indicator, p) }, onOpen = { editing = p })
+                if (i < custom.lastIndex) Hairline(start = S.pad)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PatternRow(p: Pattern, onPlay: () -> Unit, onOpen: () -> Unit) {
+    Row(Modifier.fillMaxWidth().rowPress(onClick = onOpen).padding(start = S.pad, end = S.s, top = S.m, bottom = S.m), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(p.name, style = T.headline, color = C.text)
+            Text("${p.steps.size} steps · ${p.duration} ms", style = T.sub.tabular(), color = C.text2)
+        }
+        CircleAction(Icons.Rounded.PlayArrow, "Play", tint = C.accent, onClick = onPlay)
+    }
+}
+
+@Composable
+fun EditorScreen(settings: Settings, initial: Pattern, close: () -> Unit) {
+    var name by remember { mutableStateOf(initial.name) }
+    val steps = remember { mutableStateListOf(*initial.steps.toTypedArray()) }
+    var selected by remember { mutableIntStateOf(0) }
+    val isCustom = settings.customPatterns().any { it.id == initial.id }
+    fun current() = Pattern(initial.id, name.ifBlank { "Pattern" }, steps.toList())
+
+    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+        Header("Edit pattern", close) {
+            CircleAction(Icons.Rounded.PlayArrow, "Preview", tint = C.accent) { Engine.play(Layer.Indicator, current()) }
+            if (isCustom) CircleAction(Icons.Rounded.Delete, "Delete", tint = C.red, haptic = Haptic.REJECT) { settings.deletePattern(initial.id); close() }
+        }
+        Card {
+            Row(Modifier.padding(horizontal = S.pad, vertical = S.m), verticalAlignment = Alignment.CenterVertically) {
+                Text("Name", style = T.body, color = C.text2, modifier = Modifier.width(64.dp))
+                BasicTextField(name, { name = it }, singleLine = true, textStyle = T.body.copy(color = C.text), cursorBrush = SolidColor(C.accent), modifier = Modifier.weight(1f))
+            }
+        }
+        // Step timeline.
+        LazyRow(contentPadding = PaddingValues(horizontal = S.edge, vertical = S.m), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+            itemsIndexed(steps) { i, s ->
+                Column(
+                    Modifier.clip(RoundedCornerShape(Radius.tile)).background(if (i == selected) C.accentSoft else C.card)
+                        .pressable(Haptic.SELECT) { selected = i }.padding(S.s),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    GlyphDiagram(s.levels, Modifier.width(44.dp))
+                    Spacer(Modifier.height(S.xs))
+                    Text("${s.ms} ms", style = T.caption.tabular(), color = if (i == selected) C.accent else C.text2)
+                }
+            }
+            item {
+                Box(
+                    Modifier.size(width = 60.dp, height = 112.dp).clip(RoundedCornerShape(Radius.tile)).background(C.card)
+                        .pressable(Haptic.SELECT) { steps.add(steps.getOrNull(selected) ?: Step.all(200, 0)); selected = steps.lastIndex },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Rounded.Add, "Add step", tint = C.accent) }
+            }
+        }
+        val step = steps.getOrNull(selected)
+        if (step != null) {
+            var level by remember(selected) { mutableFloatStateOf(step.levels.maxOrNull()?.takeIf { it > 0 }?.toFloat() ?: 100f) }
+            Card(Modifier.weight(1f)) {
+                Row(Modifier.padding(S.pad), verticalAlignment = Alignment.CenterVertically) {
+                    GlyphDiagram(step.levels, Modifier.width(120.dp)) { z ->
+                        val l = step.levels.copyOf()
+                        l[z.ordinal] = if (l[z.ordinal] > 0) 0 else level.toInt()
+                        steps[selected] = step.copy(levels = l)
+                        Engine.flash(Layer.Indicator, l, 500)
+                    }
+                    Spacer(Modifier.width(S.l))
+                    Column(Modifier.weight(1f)) {
+                        Text("Step ${selected + 1}", style = T.headline, color = C.text)
+                        Text("Tap zones to switch them on or off.", style = T.sub, color = C.text2)
+                        Spacer(Modifier.height(S.m))
+                        Row(horizontalArrangement = Arrangement.spacedBy(S.s)) {
+                            Chip("All", false) { steps[selected] = Step.all(step.ms, level.toInt()) }
+                            Chip("None", false) { steps[selected] = Step.all(step.ms, 0) }
+                        }
+                        if (steps.size > 1) {
+                            Spacer(Modifier.height(S.s))
+                            Chip("Delete step", false) { steps.removeAt(selected); selected = (selected - 1).coerceAtLeast(0) }
+                        }
+                    }
+                }
+                LevelSlider("Brightness of new zones", level.toInt()) { level = it.toFloat() }
+                LevelSlider("Duration", step.ms, 40..1500, " ms") { steps[selected] = step.copy(ms = it) }
+            }
+        }
+        Spacer(Modifier.height(S.m))
+        Box(
+            Modifier.padding(horizontal = S.edge).fillMaxWidth().height(52.dp).clip(CircleShape).background(C.accent)
+                .pressable(Haptic.SUCCESS) { settings.savePattern(current()); close() },
+            contentAlignment = Alignment.Center,
+        ) { Text("Save pattern", style = T.headline, color = C.onAccent) }
+        Spacer(Modifier.height(S.m))
+    }
+}
