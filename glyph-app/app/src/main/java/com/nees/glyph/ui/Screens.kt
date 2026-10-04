@@ -331,3 +331,62 @@ fun AppsScreen(settings: Settings, back: () -> Unit) {
 
 // ============================================================ Contacts
 
+private data class ContactEntry(val key: String, val name: String)
+
+@Composable
+fun ContactsScreen(settings: Settings, back: () -> Unit) {
+    val ctx = LocalContext.current
+    rememberSettingsVersion(settings)
+    var query by remember { mutableStateOf("") }
+    var picking by remember { mutableStateOf<String?>(null) }
+    var pickDefault by remember { mutableStateOf(false) }
+    val contacts by produceState(emptyList<ContactEntry>()) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val out = ArrayList<ContactEntry>()
+                ctx.contentResolver.query(
+                    ContactsContract.Contacts.CONTENT_URI,
+                    arrayOf(ContactsContract.Contacts.LOOKUP_KEY, ContactsContract.Contacts.DISPLAY_NAME_PRIMARY),
+                    "${ContactsContract.Contacts.HAS_PHONE_NUMBER}=1", null, "${ContactsContract.Contacts.DISPLAY_NAME_PRIMARY} COLLATE LOCALIZED ASC",
+                )?.use { c -> while (c.moveToNext()) out += ContactEntry(c.getString(0), c.getString(1) ?: "") }
+                out
+            }.getOrDefault(emptyList())
+        }
+    }
+    val shown = contacts.filter { query.isBlank() || it.name.contains(query, true) }
+    fun name(id: String?) = when (id) { null -> "Default"; "off" -> "Off"; else -> settings.pattern(id)?.name ?: "Default" }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = S.xxl)) {
+        item {
+            Header("Contact patterns", back)
+            Card { FeatureRow(Icons.Rounded.Call, "Default ringing pattern", name(settings.defaultCallPattern), onOpen = { pickDefault = true }) }
+            Spacer(Modifier.height(S.m))
+            SearchBar(query, { query = it }, "Search contacts")
+            Spacer(Modifier.height(S.s))
+        }
+        itemsIndexed(shown, key = { _, c -> c.key }) { i, c ->
+            Column(Modifier.cardSlice(i, shown.size)) {
+                Row(
+                    Modifier.fillMaxWidth().rowPress { picking = c.key }.padding(horizontal = S.pad, vertical = S.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Avatar(c.name, null, 36.dp)
+                    Spacer(Modifier.width(S.m))
+                    Text(c.name, style = T.body, color = C.text, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val chosen = settings.contactPattern(c.key)
+                    Text(name(chosen), style = T.sub, color = if (chosen != null) C.accent else C.text3)
+                }
+                if (i < shown.lastIndex) Hairline(start = S.pad + 36.dp + S.m)
+            }
+        }
+    }
+    picking?.let { key ->
+        PatternPicker(settings, settings.contactPattern(key), allowDefault = true, onDismiss = { picking = null }) { settings.setContactPattern(key, it) }
+    }
+    if (pickDefault) {
+        PatternPicker(settings, settings.defaultCallPattern, allowDefault = false, onDismiss = { pickDefault = false }) { settings.defaultCallPattern = it ?: "comet" }
+    }
+}
+
+// ============================================================ Visualizer
+
