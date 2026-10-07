@@ -18,3 +18,22 @@ import com.nees.talk.sms.SentReceiver
 
 data class PhoneNum(val number: String, val label: String)
 
+data class Contact(
+    val id: Long,
+    val name: String,
+    val numbers: List<PhoneNum>,
+    val starred: Boolean,
+    val photo: String?,
+)
+
+data class CallEntry(
+    val number: String,
+    val type: Int,
+    val date: Long,
+    val duration: Long,
+    val accountId: String?,
+    val count: Int,
+) {
+    val missed get() = type == CallLog.Calls.MISSED_TYPE || type == CallLog.Calls.REJECTED_TYPE
+}
+
