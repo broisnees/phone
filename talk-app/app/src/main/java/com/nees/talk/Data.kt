@@ -174,3 +174,28 @@ object Repo {
         )
     }
 
+    fun threadIdFor(ctx: Context, address: String): Long = Telephony.Threads.getOrCreateThreadId(ctx, address)
+
+    fun sims(ctx: Context): List<Sim> = runCatching {
+        val subs = ctx.getSystemService(SubscriptionManager::class.java).activeSubscriptionInfoList.orEmpty()
+        val telecom = ctx.getSystemService(TelecomManager::class.java)
+        val tel = ctx.getSystemService(TelephonyManager::class.java)
+        val handles = telecom.callCapablePhoneAccounts
+        subs.sortedBy { it.simSlotIndex }.map { info ->
+            Sim(
+                info.subscriptionId, info.simSlotIndex, info.displayName?.toString() ?: "SIM ${info.simSlotIndex + 1}",
+                handles.firstOrNull { tel.getSubscriptionId(it) == info.subscriptionId },
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    fun placeCall(ctx: Context, number: String, sim: Sim?) {
+        val extras = Bundle()
+        sim?.handle?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }
+        ctx.getSystemService(TelecomManager::class.java).placeCall(Uri.fromParts("tel", number, null), extras)
+    }
+
+    /**
+     * Sends an SMS. As the default SMS app we must write the message to the provider ourselves;
+     * it goes in as "outbox" and [SentReceiver] flips it to sent or failed.
+     */
