@@ -99,3 +99,30 @@ object Repo {
         return byId.values.map { Contact(it.id, it.name, it.nums.values.toList(), it.starred, it.photo) }
     }
 
+    fun setStarred(ctx: Context, id: Long, starred: Boolean) {
+        val values = ContentValues().apply { put(ContactsContract.Contacts.STARRED, if (starred) 1 else 0) }
+        ctx.contentResolver.update(
+            ContactsContract.Contacts.CONTENT_URI, values, "${ContactsContract.Contacts._ID}=?", arrayOf(id.toString()),
+        )
+    }
+
+    /** Recent calls, with back-to-back calls to the same number and outcome folded into one row. */
+    fun calls(ctx: Context, limit: Int = 400): List<CallEntry> {
+        val proj = arrayOf(
+            CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE,
+            CallLog.Calls.DURATION, CallLog.Calls.PHONE_ACCOUNT_ID,
+        )
+        val out = ArrayList<CallEntry>()
+        ctx.contentResolver.query(CallLog.Calls.CONTENT_URI, proj, null, null, "${CallLog.Calls.DATE} DESC")?.use { c ->
+            var n = 0
+            while (c.moveToNext() && n++ < limit) {
+                val e = CallEntry(c.getString(0) ?: "", c.getInt(1), c.getLong(2), c.getLong(3), c.getString(4), 1)
+                val prev = out.lastOrNull()
+                if (prev != null && numberKey(prev.number) == numberKey(e.number) && prev.missed == e.missed) {
+                    out[out.lastIndex] = prev.copy(count = prev.count + 1)
+                } else out += e
+            }
+        }
+        return out
+    }
+
