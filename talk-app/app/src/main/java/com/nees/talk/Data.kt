@@ -126,3 +126,26 @@ object Repo {
         return out
     }
 
+    private val smsProj = arrayOf(
+        Telephony.Sms._ID, Telephony.Sms.THREAD_ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
+        Telephony.Sms.DATE, Telephony.Sms.TYPE, Telephony.Sms.READ, Telephony.Sms.SUBSCRIPTION_ID,
+    )
+
+    private fun android.database.Cursor.toSms() = Sms(
+        getLong(0), getLong(1), getString(2) ?: "", getString(3) ?: "",
+        getLong(4), getInt(5), getInt(6) == 1, getInt(7),
+    )
+
+    fun conversations(ctx: Context): List<Conversation> {
+        val latest = LinkedHashMap<Long, Sms>()
+        val unread = HashMap<Long, Int>()
+        ctx.contentResolver.query(Telephony.Sms.CONTENT_URI, smsProj, null, null, "${Telephony.Sms.DATE} DESC")?.use { c ->
+            while (c.moveToNext()) {
+                val s = c.toSms()
+                latest.putIfAbsent(s.threadId, s)
+                if (!s.read && !s.outgoing) unread[s.threadId] = (unread[s.threadId] ?: 0) + 1
+            }
+        }
+        return latest.values.map { Conversation(it.threadId, it.address, it, unread[it.threadId] ?: 0) }
+    }
+
