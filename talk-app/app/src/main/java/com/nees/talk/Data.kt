@@ -149,3 +149,28 @@ object Repo {
         return latest.values.map { Conversation(it.threadId, it.address, it, unread[it.threadId] ?: 0) }
     }
 
+    fun thread(ctx: Context, threadId: Long): List<Sms> {
+        val out = ArrayList<Sms>()
+        ctx.contentResolver.query(
+            Telephony.Sms.CONTENT_URI, smsProj, "${Telephony.Sms.THREAD_ID}=?", arrayOf(threadId.toString()),
+            "${Telephony.Sms.DATE} ASC",
+        )?.use { c -> while (c.moveToNext()) out += c.toSms() }
+        return out
+    }
+
+    /** Thread ids whose message bodies contain [q]; used by message search. */
+    fun searchThreads(ctx: Context, q: String): Set<Long> {
+        val ids = HashSet<Long>()
+        ctx.contentResolver.query(
+            Telephony.Sms.CONTENT_URI, arrayOf(Telephony.Sms.THREAD_ID), "${Telephony.Sms.BODY} LIKE ?", arrayOf("%$q%"), null,
+        )?.use { c -> while (c.moveToNext()) ids += c.getLong(0) }
+        return ids
+    }
+
+    fun markRead(ctx: Context, threadId: Long) {
+        val values = ContentValues().apply { put(Telephony.Sms.READ, 1); put(Telephony.Sms.SEEN, 1) }
+        ctx.contentResolver.update(
+            Telephony.Sms.CONTENT_URI, values, "${Telephony.Sms.THREAD_ID}=? AND ${Telephony.Sms.READ}=0", arrayOf(threadId.toString()),
+        )
+    }
+
