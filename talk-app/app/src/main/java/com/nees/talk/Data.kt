@@ -199,3 +199,43 @@ object Repo {
      * Sends an SMS. As the default SMS app we must write the message to the provider ourselves;
      * it goes in as "outbox" and [SentReceiver] flips it to sent or failed.
      */
+    fun sendSms(ctx: Context, address: String, body: String, subId: Int) {
+        val values = ContentValues().apply {
+            put(Telephony.Sms.ADDRESS, address)
+            put(Telephony.Sms.BODY, body)
+            put(Telephony.Sms.DATE, System.currentTimeMillis())
+            put(Telephony.Sms.READ, 1)
+            put(Telephony.Sms.SEEN, 1)
+            put(Telephony.Sms.SUBSCRIPTION_ID, subId)
+        }
+        val uri = ctx.contentResolver.insert(Telephony.Sms.Outbox.CONTENT_URI, values) ?: return
+        val sent = PendingIntent.getBroadcast(
+            ctx, uri.hashCode(), Intent(ctx, SentReceiver::class.java).setData(uri), PendingIntent.FLAG_IMMUTABLE,
+        )
+        val manager = ctx.getSystemService(SmsManager::class.java).createForSubscriptionId(subId)
+        val parts = manager.divideMessage(body)
+        runCatching {
+            if (parts.size > 1) manager.sendMultipartTextMessage(address, null, parts, ArrayList(parts.map { sent }), null)
+            else manager.sendTextMessage(address, null, body, sent, null)
+        }.onFailure { setSmsType(ctx, uri, Telephony.Sms.MESSAGE_TYPE_FAILED) }
+    }
+
+    fun setSmsType(ctx: Context, uri: Uri, type: Int) {
+        ctx.contentResolver.update(uri, ContentValues().apply { put(Telephony.Sms.TYPE, type) }, null, null)
+    }
+
+    fun deleteThread(ctx: Context, threadId: Long) {
+        ctx.contentResolver.delete(Telephony.Sms.CONTENT_URI, "${Telephony.Sms.THREAD_ID}=?", arrayOf(threadId.toString()))
+    }
+
+    /** Marks the newest incoming message unread so the thread shows the unread dot again. */
+    fun markUnread(ctx: Context, threadId: Long) {
+        val last = thread(ctx, threadId).lastOrNull { !it.outgoing } ?: return
+        val values = ContentValues().apply { put(Telephony.Sms.READ, 0) }
+        ctx.contentResolver.update(Telephony.Sms.CONTENT_URI, values, "${Telephony.Sms._ID}=?", arrayOf(last.id.toString()))
+    }
+
+    fun deleteSms(ctx: Context, id: Long) {
+        ctx.contentResolver.delete(Telephony.Sms.CONTENT_URI, "${Telephony.Sms._ID}=?", arrayOf(id.toString()))
+    }
+}
