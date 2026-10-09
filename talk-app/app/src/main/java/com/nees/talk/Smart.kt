@@ -39,3 +39,29 @@ object Otp {
 
 // ---------------------------------------------------------------- Smart inbox
 
+enum class Category(val label: String) { Personal("Personal"), Transactions("Money"), Codes("Codes"), Promotions("Offers") }
+
+object Classifier {
+    private val money = Regex(
+        "(credited|debited|a/c|acct|account|balance|txn|transaction|npr|rs\\.?\\s?\\d|paid|payment|received|transfer|withdraw|deposit|esewa|khalti|fonepay|ime ?pay|wallet)",
+        RegexOption.IGNORE_CASE,
+    )
+    private val promo = Regex(
+        "(offer|% ?off|discount|sale|deal|cashback|bonus|recharge|data pack|pack|subscribe|visit|click|https?://|www\\.|win|free|limited|hurry|dial \\*)",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Senders with letters (NABIL_ALERT, NCELL) or short codes are businesses, not people. */
+    fun isBusiness(address: String) = address.any(Char::isLetter) || address.count(Char::isDigit) in 1..6
+
+    fun of(address: String, body: String, known: Boolean): Category = when {
+        Otp.find(body) != null -> Category.Codes
+        known || !isBusiness(address) -> Category.Personal
+        money.containsMatchIn(body) -> Category.Transactions
+        promo.containsMatchIn(body) -> Category.Promotions
+        else -> Category.Promotions
+    }
+}
+
+// ---------------------------------------------------------------- Caller info (Nepal-first)
+
