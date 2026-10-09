@@ -65,3 +65,42 @@ object Classifier {
 
 // ---------------------------------------------------------------- Caller info (Nepal-first)
 
+data class NumberInfo(val carrier: String?, val region: String?, val kind: String)
+
+object NumberIntel {
+    private val mobile = mapOf(
+        "984" to "NTC", "985" to "NTC", "986" to "NTC", "974" to "NTC", "975" to "NTC", "976" to "NTC",
+        "980" to "Ncell", "981" to "Ncell", "982" to "Ncell", "970" to "Ncell",
+        "961" to "Smart", "962" to "Smart", "988" to "Smart",
+        "972" to "UTL",
+    )
+    private val areas = mapOf(
+        "1" to "Kathmandu Valley", "61" to "Pokhara", "21" to "Biratnagar", "56" to "Chitwan", "71" to "Butwal",
+        "81" to "Nepalgunj", "51" to "Birgunj", "41" to "Janakpur", "25" to "Dharan", "23" to "Jhapa",
+        "91" to "Dhangadhi", "64" to "Syangja", "82" to "Dang", "57" to "Hetauda", "33" to "Rajbiraj",
+    )
+    private val countries = mapOf(
+        "91" to "India", "1" to "USA / Canada", "44" to "United Kingdom", "61" to "Australia", "971" to "UAE",
+        "974" to "Qatar", "966" to "Saudi Arabia", "965" to "Kuwait", "968" to "Oman", "973" to "Bahrain",
+        "81" to "Japan", "82" to "South Korea", "60" to "Malaysia", "86" to "China", "49" to "Germany", "33" to "France",
+    )
+
+    fun of(raw: String): NumberInfo {
+        if (Classifier.isBusiness(raw)) return NumberInfo(null, null, "Business")
+        val digits = raw.filter(Char::isDigit)
+        val intl = raw.trim().startsWith("+") || raw.trim().startsWith("00")
+        val national = when {
+            digits.startsWith("977") && intl -> digits.removePrefix("977")
+            intl -> return countries.entries.sortedByDescending { it.key.length }
+                .firstOrNull { digits.removePrefix("00").startsWith(it.key) }
+                ?.let { NumberInfo(null, it.value, "International") } ?: NumberInfo(null, null, "International")
+            else -> digits
+        }
+        if (national.length == 10 && national.startsWith("9")) {
+            return NumberInfo(mobile[national.take(3)], null, "Mobile")
+        }
+        val local = national.removePrefix("0")
+        val area = areas.entries.sortedByDescending { it.key.length }.firstOrNull { local.startsWith(it.key) }
+        return NumberInfo(null, area?.value, if (local.length in 7..9) "Landline" else "Phone")
+    }
+
