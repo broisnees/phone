@@ -104,3 +104,26 @@ object NumberIntel {
         return NumberInfo(null, area?.value, if (local.length in 7..9) "Landline" else "Phone")
     }
 
+    fun label(raw: String): String {
+        val i = of(raw)
+        return listOfNotNull(i.carrier, i.region, i.kind.takeIf { i.carrier == null && i.region == null }).joinToString(" · ")
+    }
+}
+
+// ---------------------------------------------------------------- Preferences: pins, templates
+
+object Prefs {
+    private fun p(ctx: Context) = ctx.getSharedPreferences("talk", Context.MODE_PRIVATE)
+
+    fun pinned(ctx: Context): Set<Long> = p(ctx).getStringSet("pins", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
+
+    fun togglePin(ctx: Context, threadId: Long) {
+        val now = pinned(ctx).toMutableSet().apply { if (!add(threadId)) remove(threadId) }
+        p(ctx).edit().putStringSet("pins", now.map(Long::toString).toSet()).apply()
+    }
+
+    val templates = listOf("On my way", "Call you in a bit", "Okay, done 👍", "Thank you!", "In a meeting, will text soon")
+}
+
+// ---------------------------------------------------------------- Blocking (system-wide via BlockedNumberContract)
+
