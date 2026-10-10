@@ -25,3 +25,24 @@ class CallService : InCallService() {
         CallHub.service = this
     }
 
+    override fun onDestroy() {
+        CallHub.service = null
+        super.onDestroy()
+    }
+
+    override fun onCallAdded(call: Call) = CallHub.add(this, call)
+    override fun onCallRemoved(call: Call) = CallHub.remove(this, call)
+
+    @Deprecated("Superseded by CallEndpoint APIs on 34+, still delivered on all versions")
+    override fun onCallAudioStateChanged(audioState: CallAudioState) {
+        CallHub.audio.value = audioState
+    }
+}
+
+object CallHub {
+    var service: CallService? = null
+    val calls = MutableStateFlow<List<Call>>(emptyList())
+    val audio = MutableStateFlow<CallAudioState?>(null)
+    /** Bumped on every call state/detail change so observers recompose. */
+    val version = MutableStateFlow(0)
+
