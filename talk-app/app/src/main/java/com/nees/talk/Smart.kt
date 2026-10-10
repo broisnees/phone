@@ -127,3 +127,16 @@ object Prefs {
 
 // ---------------------------------------------------------------- Blocking (system-wide via BlockedNumberContract)
 
+object Blocker {
+    fun isBlocked(ctx: Context, number: String): Boolean =
+        runCatching { android.provider.BlockedNumberContract.isBlocked(ctx, number) }.getOrDefault(false)
+
+    fun block(ctx: Context, number: String) {
+        val values = ContentValues().apply { put(BlockedNumbers.COLUMN_ORIGINAL_NUMBER, number) }
+        runCatching { ctx.contentResolver.insert(BlockedNumbers.CONTENT_URI, values) }
+    }
+
+    fun unblock(ctx: Context, number: String) {
+        runCatching { android.provider.BlockedNumberContract.unblock(ctx, number) }
+    }
+}
