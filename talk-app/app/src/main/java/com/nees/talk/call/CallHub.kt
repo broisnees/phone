@@ -46,3 +46,27 @@ object CallHub {
     /** Bumped on every call state/detail change so observers recompose. */
     val version = MutableStateFlow(0)
 
+    private lateinit var app: Context
+    private val names = HashMap<String, String>()
+
+    private val callback = object : Call.Callback() {
+        override fun onStateChanged(call: Call, state: Int) = changed(call)
+        override fun onDetailsChanged(call: Call, details: Call.Details) = changed(call)
+    }
+
+    fun add(ctx: Context, call: Call) {
+        app = ctx.applicationContext
+        call.registerCallback(callback)
+        calls.update { it + call }
+        changed(call)
+        if (call.details.state != Call.STATE_RINGING) openScreen(ctx)
+    }
+
+    fun remove(ctx: Context, call: Call) {
+        call.unregisterCallback(callback)
+        calls.update { it - call }
+        version.update { it + 1 }
+        if (calls.value.isEmpty()) ctx.getSystemService(NotificationManager::class.java).cancel(NOTIF_ID)
+        else primary()?.let { notify(it) }
+    }
+
