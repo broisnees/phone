@@ -97,3 +97,52 @@ object CallHub {
         }
     }
 
+    fun openScreen(ctx: Context) {
+        ctx.startActivity(
+            Intent(ctx, InCallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
+        )
+    }
+
+    fun answer() = primary()?.answer(VideoProfile.STATE_AUDIO_ONLY)
+    fun hangUp() = primary()?.let { if (it.details.state == Call.STATE_RINGING) it.reject(false, null) else it.disconnect() }
+
+    fun setMuted(muted: Boolean) = service?.setMuted(muted)
+
+    @Suppress("DEPRECATION")
+    fun setRoute(route: Int) = service?.setAudioRoute(route)
+
+    private fun notify(call: Call) {
+        val ctx = app
+        val person = Person.Builder().setName(name(ctx, call)).setImportant(true).build()
+        val screen = PendingIntent.getActivity(
+            ctx, 0, Intent(ctx, InCallActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val hangUp = PendingIntent.getBroadcast(
+            ctx, 1, Intent(ctx, CallActionReceiver::class.java).setAction(CallActionReceiver.HANG_UP), PendingIntent.FLAG_IMMUTABLE,
+        )
+        val ringing = call.details.state == Call.STATE_RINGING
+        val builder = if (ringing) {
+            // Answer must be an activity PendingIntent: receivers can't open activities from notifications.
+            val answer = PendingIntent.getActivity(
+                ctx, 2, Intent(ctx, InCallActivity::class.java).setAction(InCallActivity.ACTION_ANSWER),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            Notification.Builder(ctx, TalkApp.CH_INCOMING)
+                .setStyle(Notification.CallStyle.forIncomingCall(person, hangUp, answer))
+        } else {
+            Notification.Builder(ctx, TalkApp.CH_ONGOING)
+                .setStyle(Notification.CallStyle.forOngoingCall(person, hangUp))
+                .setUsesChronometer(call.details.connectTimeMillis > 0)
+                .setWhen(call.details.connectTimeMillis)
+        }
+        val n = builder
+            .setSmallIcon(R.drawable.ic_stat_call)
+            .setCategory(Notification.CATEGORY_CALL)
+            .setOngoing(true)
+            .setContentIntent(screen)
+            // CallStyle requires a full-screen intent; on the low-importance ongoing channel it never fires.
+            .setFullScreenIntent(screen, true)
+            .build()
+        ctx.getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n)
+    }
+
