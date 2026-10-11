@@ -81,3 +81,31 @@ import com.nees.talk.ui.pressable
 import com.nees.talk.ui.tabular
 import kotlinx.coroutines.delay
 
+class InCallActivity : ComponentActivity() {
+    private var proximity: PowerManager.WakeLock? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        handle(intent)
+        proximity = getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "talk:proximity")
+        setContent { TalkTheme { InCallScreen(onDone = ::finish, onProximity = ::setProximity) } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    private fun handle(intent: Intent?) {
+        if (intent?.action == ACTION_ANSWER) CallHub.answer()
+    }
+
+    /** Screen goes dark against the ear only while audio is on the earpiece. */
+    private fun setProximity(on: Boolean) {
+        val lock = proximity ?: return
+        if (on && !lock.isHeld) lock.acquire(60 * 60 * 1000L)
+        if (!on && lock.isHeld) lock.release(PowerManager.RELEASE_FLAG_WAIT_FOR_NO_PROXIMITY)
+    }
+
