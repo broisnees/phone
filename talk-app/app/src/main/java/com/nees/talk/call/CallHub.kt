@@ -146,3 +146,15 @@ object CallHub {
         ctx.getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n)
     }
 
+    private const val NOTIF_ID = 42
+}
+
+class CallActionReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        if (intent.action == HANG_UP) CallHub.hangUp()
+    }
+
+    companion object {
+        const val HANG_UP = "com.nees.talk.HANG_UP"
+    }
+}
