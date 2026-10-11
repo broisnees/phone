@@ -70,3 +70,30 @@ object CallHub {
         else primary()?.let { notify(it) }
     }
 
+    private fun changed(call: Call) {
+        version.update { it + 1 }
+        if (call == primary()) notify(call)
+    }
+
+    /** The call the UI should focus on: ringing first, then the live one, then anything held. */
+    fun primary(): Call? {
+        val list = calls.value
+        return list.firstOrNull { it.details.state == Call.STATE_RINGING }
+            ?: list.firstOrNull { it.details.state != Call.STATE_HOLDING && it.details.state != Call.STATE_DISCONNECTED }
+            ?: list.firstOrNull()
+    }
+
+    fun number(call: Call): String = call.details.handle?.schemeSpecificPart ?: ""
+
+    fun name(ctx: Context, call: Call): String {
+        val number = number(call)
+        if (number.isEmpty()) return "Unknown"
+        return names.getOrPut(number) {
+            val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
+            runCatching {
+                ctx.contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)
+                    ?.use { if (it.moveToFirst()) it.getString(0) else null }
+            }.getOrNull() ?: number
+        }
+    }
+
