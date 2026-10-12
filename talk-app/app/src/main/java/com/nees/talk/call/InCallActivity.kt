@@ -140,3 +140,56 @@ private fun InCallScreen(onDone: () -> Unit, onProximity: (Boolean) -> Unit) {
         return
     }
 
+    val state = call.details.state
+    val ringing = state == Call.STATE_RINGING
+    val route = audio?.route ?: CallAudioState.ROUTE_EARPIECE
+    val live = state == Call.STATE_ACTIVE || state == Call.STATE_DIALING || state == Call.STATE_CONNECTING
+    LaunchedEffect(live, route) { onProximity(live && route == CallAudioState.ROUTE_EARPIECE) }
+
+    val name = remember(call) { CallHub.name(ctx, call) }
+    val number = CallHub.number(call)
+    val info = remember(number) { if (number.isNotEmpty()) NumberIntel.label(number) else "" }
+    var showKeys by remember { mutableStateOf(false) }
+    val glow = hueFor(name)
+
+    Column(
+        Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(0f to glow.copy(alpha = 0.22f), 0.55f to C.bg))
+            .statusBarsPadding().navigationBarsPadding().padding(horizontal = S.edge),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(Modifier.height(56.dp))
+        if (!showKeys) {
+            Avatar(name, null, 104.dp)
+            Spacer(Modifier.height(S.xl))
+        }
+        Text(
+            name, style = T.display.copy(fontWeight = FontWeight.SemiBold), color = C.text,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(S.s))
+        StatusLine(call)
+        if (info.isNotEmpty() && name != number) {
+            Spacer(Modifier.height(S.xs))
+            Text("$number · $info", style = T.sub.tabular(), color = C.text3)
+        } else if (info.isNotEmpty()) {
+            Spacer(Modifier.height(S.xs))
+            Text(info, style = T.sub, color = C.text3)
+        }
+
+        Spacer(Modifier.weight(1f))
+        AnimatedContent(
+            targetState = when { ringing -> 0; showKeys -> 1; else -> 2 },
+            transitionSpec = { fadeIn(tween(200, easing = EaseOut)) togetherWith fadeOut(tween(120)) },
+            label = "incall",
+        ) { mode ->
+            when (mode) {
+                0 -> IncomingActions()
+                1 -> InCallKeypad(call) { showKeys = false }
+                else -> ActiveActions(call, audio, onKeys = { showKeys = true })
+            }
+        }
+        Spacer(Modifier.height(S.xxl))
+    }
+}
+
