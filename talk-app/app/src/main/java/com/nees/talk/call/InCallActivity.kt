@@ -193,3 +193,32 @@ private fun InCallScreen(onDone: () -> Unit, onProximity: (Boolean) -> Unit) {
     }
 }
 
+@Composable
+private fun StatusLine(call: Call) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(call) { while (true) { now = System.currentTimeMillis(); delay(500) } }
+    val connect = call.details.connectTimeMillis
+    val text = when (call.details.state) {
+        Call.STATE_RINGING -> "Incoming call"
+        Call.STATE_DIALING, Call.STATE_CONNECTING, Call.STATE_NEW -> "Calling…"
+        Call.STATE_HOLDING -> "On hold"
+        Call.STATE_DISCONNECTING, Call.STATE_DISCONNECTED -> "Call ended"
+        Call.STATE_ACTIVE -> if (connect > 0) duration(now - connect) else "Connected"
+        else -> ""
+    }
+    Text(text, style = T.headline.copy(fontWeight = FontWeight.Medium).tabular(), color = C.text2)
+}
+
+private fun duration(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%02d:%02d".format(s / 60, s % 60)
+}
+
+@Composable
+private fun IncomingActions() {
+    Row(Modifier.fillMaxWidth().padding(horizontal = S.xxl), horizontalArrangement = Arrangement.SpaceBetween) {
+        PhoneButton(Icons.Rounded.CallEnd, "Decline", C.red, Haptic.REJECT) { CallHub.hangUp() }
+        PhoneButton(Icons.Rounded.Call, "Accept", C.green, Haptic.SUCCESS) { CallHub.answer() }
+    }
+}
+
