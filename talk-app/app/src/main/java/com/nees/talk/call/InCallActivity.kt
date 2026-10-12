@@ -109,3 +109,34 @@ class InCallActivity : ComponentActivity() {
         if (!on && lock.isHeld) lock.release(PowerManager.RELEASE_FLAG_WAIT_FOR_NO_PROXIMITY)
     }
 
+    override fun onDestroy() {
+        setProximity(false)
+        super.onDestroy()
+    }
+
+    companion object {
+        const val ACTION_ANSWER = "com.nees.talk.ANSWER"
+    }
+}
+
+@Composable
+private fun InCallScreen(onDone: () -> Unit, onProximity: (Boolean) -> Unit) {
+    val ctx = LocalContext.current
+    val calls by CallHub.calls.collectAsState()
+    val version by CallHub.version.collectAsState()
+    val audio by CallHub.audio.collectAsState()
+    val call = remember(calls, version) { CallHub.primary() }
+
+    LaunchedEffect(calls.isEmpty()) {
+        if (calls.isEmpty()) {
+            delay(600) // let "Call ended" register before closing
+            onDone()
+        }
+    }
+    if (call == null) {
+        Box(Modifier.fillMaxSize().background(C.bg), contentAlignment = Alignment.Center) {
+            Text("Call ended", style = T.headline, color = C.text2)
+        }
+        return
+    }
+
