@@ -222,3 +222,32 @@ private fun IncomingActions() {
     }
 }
 
+@Composable
+private fun PhoneButton(icon: ImageVector, label: String, color: Color, haptic: Int, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier.size(72.dp).clip(CircleShape).background(color).pressable(haptic, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) { Icon(icon, label, tint = Color.White, modifier = Modifier.size(30.dp)) }
+        Spacer(Modifier.height(S.s))
+        Text(label, style = T.caption, color = C.text)
+    }
+}
+
+/** Soft square tile; filled white when its state is on. */
+@Composable
+private fun CallTile(icon: ImageVector, label: String, active: Boolean = false, enabled: Boolean = true, modifier: Modifier, onClick: () -> Unit) {
+    val bg by animateColorAsState(if (active) C.text else Color.White.copy(alpha = 0.08f), tween(150, easing = EaseOut), label = "tile")
+    val fg by animateColorAsState(if (active) C.bg else C.text, tween(150, easing = EaseOut), label = "tileFg")
+    Column(
+        modifier.height(84.dp).clip(RoundedCornerShape(Radius.card)).background(bg)
+            .then(if (enabled) Modifier.pressable(Haptic.SELECT, onClick = onClick) else Modifier.graphicsLayer { alpha = 0.35f }),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, label, tint = fg, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(label, style = T.caption, color = fg)
+    }
+}
+
