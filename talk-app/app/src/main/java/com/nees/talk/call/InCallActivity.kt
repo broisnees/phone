@@ -251,3 +251,43 @@ private fun CallTile(icon: ImageVector, label: String, active: Boolean = false, 
     }
 }
 
+@Composable
+private fun ActiveActions(call: Call, audio: CallAudioState?, onKeys: () -> Unit) {
+    val ctx = LocalContext.current
+    val muted = audio?.isMuted == true
+    val route = audio?.route ?: CallAudioState.ROUTE_EARPIECE
+    val hasBt = (audio?.supportedRouteMask ?: 0) and CallAudioState.ROUTE_BLUETOOTH != 0
+    val held = call.details.state == Call.STATE_HOLDING
+    val canHold = call.details.can(Call.Details.CAPABILITY_HOLD)
+    val bt = route == CallAudioState.ROUTE_BLUETOOTH
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+            CallTile(if (muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (muted) "Muted" else "Mute", muted, modifier = Modifier.weight(1f)) { CallHub.setMuted(!muted) }
+            CallTile(Icons.Rounded.Dialpad, "Keypad", modifier = Modifier.weight(1f), onClick = onKeys)
+            // Earpiece → speaker → Bluetooth (when connected) → earpiece.
+            CallTile(if (bt) Icons.Rounded.Bluetooth else Icons.Rounded.VolumeUp, if (bt) "Bluetooth" else "Speaker", route == CallAudioState.ROUTE_SPEAKER || bt, modifier = Modifier.weight(1f)) {
+                CallHub.setRoute(
+                    when (route) {
+                        CallAudioState.ROUTE_SPEAKER -> if (hasBt) CallAudioState.ROUTE_BLUETOOTH else CallAudioState.ROUTE_WIRED_OR_EARPIECE
+                        CallAudioState.ROUTE_BLUETOOTH -> CallAudioState.ROUTE_WIRED_OR_EARPIECE
+                        else -> CallAudioState.ROUTE_SPEAKER
+                    },
+                )
+            }
+        }
+        Spacer(Modifier.height(S.s))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+            CallTile(Icons.Rounded.Pause, if (held) "On hold" else "Hold", held, canHold, Modifier.weight(1f)) { if (held) call.unhold() else call.hold() }
+            CallTile(Icons.Rounded.PersonAdd, "Add call", modifier = Modifier.weight(1f)) {
+                ctx.startActivity(Intent(ctx, MainActivity::class.java).setAction(MainActivity.ACTION_KEYPAD).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            CallTile(Icons.Rounded.Contacts, "Contacts", modifier = Modifier.weight(1f)) {
+                ctx.startActivity(Intent(ctx, MainActivity::class.java).setAction(MainActivity.ACTION_CONTACTS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+        Spacer(Modifier.height(S.xxl))
+        EndButton()
+    }
+}
+
