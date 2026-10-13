@@ -291,3 +291,48 @@ private fun ActiveActions(call: Call, audio: CallAudioState?, onKeys: () -> Unit
     }
 }
 
+@Composable
+private fun EndButton() {
+    Box(
+        Modifier.size(72.dp).clip(CircleShape).background(C.red).pressable(Haptic.REJECT) { CallHub.hangUp() },
+        contentAlignment = Alignment.Center,
+    ) { Icon(Icons.Rounded.CallEnd, "End call", tint = Color.White, modifier = Modifier.size(30.dp)) }
+}
+
+private val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")
+
+@Composable
+private fun InCallKeypad(call: Call, onHide: () -> Unit) {
+    val tones = remember { runCatching { ToneGenerator(AudioManager.STREAM_DTMF, 70) }.getOrNull() }
+    var typed by remember { mutableStateOf("") }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(typed.takeLast(16).ifEmpty { " " }, style = T.title.tabular(), color = C.text, modifier = Modifier.height(36.dp))
+        Spacer(Modifier.height(S.m))
+        Column(verticalArrangement = Arrangement.spacedBy(S.m)) {
+            keys.chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(S.xl)) {
+                    row.forEach { k ->
+                        Box(
+                            Modifier.size(72.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).pressable(Haptic.KEY) {
+                                typed += k
+                                call.playDtmfTone(k[0])
+                                call.stopDtmfTone()
+                                tones?.startTone(dtmfTone(k[0]), 100)
+                            },
+                            contentAlignment = Alignment.Center,
+                        ) { Text(k, style = T.title.copy(fontSize = 28.sp, fontWeight = FontWeight.Normal), color = C.text) }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(S.xl))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(72.dp + S.xl))
+            EndButton()
+            Box(Modifier.width(72.dp + S.xl), contentAlignment = Alignment.Center) {
+                Text("Hide", style = T.headline, color = C.text, modifier = Modifier.pressable(Haptic.SELECT, onClick = onHide).padding(S.s))
+            }
+        }
+    }
+}
+
