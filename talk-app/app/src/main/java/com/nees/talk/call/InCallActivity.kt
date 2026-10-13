@@ -336,3 +336,9 @@ private fun InCallKeypad(call: Call, onHide: () -> Unit) {
     }
 }
 
+fun dtmfTone(c: Char): Int = when (c) {
+    in '0'..'9' -> ToneGenerator.TONE_DTMF_0 + (c - '0')
+    '*' -> ToneGenerator.TONE_DTMF_S
+    '#' -> ToneGenerator.TONE_DTMF_P
+    else -> ToneGenerator.TONE_DTMF_0
+}
