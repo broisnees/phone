@@ -76,3 +76,54 @@ class RespondService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onBind(intent: Intent?): IBinder? = null
+}
+
+class SentReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        val uri = intent.data ?: return
+        val type = if (resultCode == Activity.RESULT_OK) Telephony.Sms.MESSAGE_TYPE_SENT else Telephony.Sms.MESSAGE_TYPE_FAILED
+        Repo.setSmsType(ctx, uri, type)
+    }
+}
+
+class ReplyReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        val threadId = intent.getLongExtra(EXTRA_THREAD, -1)
+        val address = intent.getStringExtra(EXTRA_ADDRESS) ?: return
+        val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_REPLY)?.toString()
+        val pending = goAsync()
+        thread {
+            try {
+                if (!text.isNullOrBlank()) {
+                    val subId = Repo.thread(ctx, threadId).lastOrNull()?.subId?.takeIf { it >= 0 }
+                        ?: SmsManager.getDefaultSmsSubscriptionId()
+                    Repo.sendSms(ctx, address, text, subId)
+                }
+                Repo.markRead(ctx, threadId)
+                ctx.getSystemService(NotificationManager::class.java).cancel(threadId.toInt())
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+
+    companion object {
+        const val KEY_REPLY = "reply"
+        const val EXTRA_THREAD = "thread"
+        const val EXTRA_ADDRESS = "address"
+        const val ACTION_READ = "com.nees.talk.READ"
+    }
+}
+
+/** "Copy" action on a code notification. */
+class CopyCodeReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        intent.getStringExtra(EXTRA_CODE)?.let { Otp.copy(ctx, it) }
+    }
+
+    companion object {
+        const val EXTRA_CODE = "code"
+    }
+}
+
