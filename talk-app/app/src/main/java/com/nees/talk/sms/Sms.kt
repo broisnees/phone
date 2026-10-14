@@ -127,3 +127,36 @@ class CopyCodeReceiver : BroadcastReceiver() {
     }
 }
 
+object MessageNotifier {
+    /**
+     * A one-time code gets its own compact notification: the code is the title (already copied),
+     * one "Copy" action, and it disappears by itself after 10 minutes.
+     */
+    fun showCode(ctx: Context, threadId: Long, address: String, code: String) {
+        val sender = Directory(Repo.contacts(ctx)).name(address)
+        val open = PendingIntent.getActivity(
+            ctx, threadId.toInt(),
+            Intent(ctx, MainActivity::class.java)
+                .setAction(MainActivity.ACTION_OPEN_THREAD)
+                .putExtra(ReplyReceiver.EXTRA_THREAD, threadId)
+                .putExtra(ReplyReceiver.EXTRA_ADDRESS, address),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val copy = PendingIntent.getBroadcast(
+            ctx, code.hashCode(), Intent(ctx, CopyCodeReceiver::class.java).putExtra(CopyCodeReceiver.EXTRA_CODE, code),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val icon = Icon.createWithResource(ctx, R.drawable.ic_stat_msg)
+        val n = Notification.Builder(ctx, TalkApp.CH_MESSAGES)
+            .setSmallIcon(R.drawable.ic_stat_msg)
+            .setContentTitle("$code · copied")
+            .setContentText("Code from $sender — paste it from your keyboard")
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setTimeoutAfter(10 * 60 * 1000L)
+            .addAction(Notification.Action.Builder(icon, "Copy $code", copy).build())
+            .build()
+        ctx.getSystemService(NotificationManager::class.java).notify(threadId.toInt(), n)
+    }
+
