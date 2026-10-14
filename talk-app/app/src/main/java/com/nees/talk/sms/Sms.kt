@@ -160,3 +160,48 @@ object MessageNotifier {
         ctx.getSystemService(NotificationManager::class.java).notify(threadId.toInt(), n)
     }
 
+    fun show(ctx: Context, threadId: Long, address: String) {
+        val dir = Directory(Repo.contacts(ctx))
+        val name = dir.name(address)
+        val unread = Repo.thread(ctx, threadId).filter { !it.read && !it.outgoing }.takeLast(6)
+        if (unread.isEmpty()) return
+
+        val sender = Person.Builder().setName(name).setKey(address).build()
+        val me = Person.Builder().setName("You").build()
+        val style = Notification.MessagingStyle(me)
+        unread.forEach { style.addMessage(it.body, it.date, sender) }
+
+        val open = PendingIntent.getActivity(
+            ctx, threadId.toInt(),
+            Intent(ctx, MainActivity::class.java)
+                .setAction(MainActivity.ACTION_OPEN_THREAD)
+                .putExtra(ReplyReceiver.EXTRA_THREAD, threadId)
+                .putExtra(ReplyReceiver.EXTRA_ADDRESS, address),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val replyIntent = Intent(ctx, ReplyReceiver::class.java)
+            .putExtra(ReplyReceiver.EXTRA_THREAD, threadId)
+            .putExtra(ReplyReceiver.EXTRA_ADDRESS, address)
+        val reply = PendingIntent.getBroadcast(
+            ctx, threadId.toInt(), replyIntent, PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val markRead = PendingIntent.getBroadcast(
+            ctx, -threadId.toInt() - 1, Intent(replyIntent).setAction(ReplyReceiver.ACTION_READ),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val input = RemoteInput.Builder(ReplyReceiver.KEY_REPLY).setLabel("Reply").build()
+        val icon = Icon.createWithResource(ctx, R.drawable.ic_stat_msg)
+
+        val n = Notification.Builder(ctx, TalkApp.CH_MESSAGES)
+            .setSmallIcon(R.drawable.ic_stat_msg)
+            .setStyle(style)
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setShowWhen(true)
+            .addAction(Notification.Action.Builder(icon, "Reply", reply).addRemoteInput(input).setAllowGeneratedReplies(true).build())
+            .addAction(Notification.Action.Builder(icon, "Mark as read", markRead).build())
+            .build()
+        ctx.getSystemService(NotificationManager::class.java).notify(threadId.toInt(), n)
+    }
+}
