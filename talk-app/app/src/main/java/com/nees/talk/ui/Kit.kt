@@ -120,3 +120,46 @@ object Radius {
     val field = 22.dp
 }
 
+val Inter = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold),
+)
+
+/** Seven steps, nothing in between. Large type tightens; the uppercase label opens up. */
+object T {
+    private fun s(size: Int, line: Int, weight: FontWeight, track: Double) =
+        TextStyle(fontFamily = Inter, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight, letterSpacing = track.sp)
+
+    val display = s(32, 38, FontWeight.Bold, -1.0)
+    val title = s(24, 30, FontWeight.SemiBold, -0.6)
+    val headline = s(16, 21, FontWeight.SemiBold, -0.2)
+    val body = s(16, 22, FontWeight.Normal, -0.2)
+    val sub = s(14, 19, FontWeight.Normal, -0.1)
+    val caption = s(12, 16, FontWeight.Medium, 0.0)
+    val label = s(12, 16, FontWeight.SemiBold, 0.6)
+}
+
+fun TextStyle.tabular() = copy(fontFeatureSettings = "tnum")
+
+/** Strong ease-out: movement starts immediately, settles softly. */
+val EaseOut = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
+
+@Composable
+fun TalkTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            background = C.bg, surface = C.card, primary = C.accent, onPrimary = C.onAccent,
+            surfaceContainer = C.card, surfaceContainerHigh = C.raised, onSurface = C.text,
+        ),
+        content = content,
+    )
+}
+
+// ============================================================ Haptics
+
+/**
+ * One meaning, one feeling (Apple/Pixel vocabulary), all clear system effects that follow the
+ * user's intensity setting. Ordinary scrolling and row taps get nothing.
+ */
