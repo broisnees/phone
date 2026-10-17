@@ -343,3 +343,56 @@ fun ActionTile(
     }
 }
 
+@Composable
+fun SimChip(sims: List<Sim>, selected: Sim?, onSelect: (Sim) -> Unit, modifier: Modifier = Modifier) {
+    if (sims.size < 2 || selected == null) return
+    Row(
+        modifier.height(32.dp).clip(CircleShape).background(C.raised)
+            .pressable(Haptic.SELECT) { onSelect(sims[(sims.indexOf(selected) + 1) % sims.size]) }
+            .padding(horizontal = S.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(C.accentSoft),
+            contentAlignment = Alignment.Center,
+        ) { Text("${selected.slot + 1}", style = T.caption.copy(fontSize = 10.sp, lineHeight = 12.sp), color = C.accent) }
+        Spacer(Modifier.width(6.dp))
+        Text(selected.name, style = T.caption, color = C.text, maxLines = 1)
+    }
+}
+
+// ============================================================ Avatar
+
+private val palette = listOf(
+    Color(0xFF7D7AFF), Color(0xFF5AC8D8), Color(0xFFFF9F45), Color(0xFFFF6B8B),
+    Color(0xFF64B5FF), Color(0xFFC17BFF), Color(0xFF5FD38A), Color(0xFFD4B483),
+)
+
+/** Stable per-name hue, so a person keeps their colour everywhere. */
+fun hueFor(name: String): Color = palette[(name.hashCode() and Int.MAX_VALUE) % palette.size]
+
+@Composable
+fun Avatar(name: String, photo: String?, size: Dp = S.avatar) {
+    val ctx = LocalContext.current
+    val bitmap by produceState<android.graphics.Bitmap?>(null, photo) {
+        value = photo?.let { p ->
+            withContext(Dispatchers.IO) {
+                runCatching { ctx.contentResolver.openInputStream(Uri.parse(p))?.use(BitmapFactory::decodeStream) }.getOrNull()
+            }
+        }
+    }
+    val hue = hueFor(name)
+    Box(
+        Modifier.size(size).clip(CircleShape).background(hue.copy(alpha = 0.18f)).border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        val bmp = bitmap
+        if (bmp != null) {
+            Image(bmp.asImageBitmap(), null, Modifier.size(size), contentScale = ContentScale.Crop)
+        } else {
+            val fs = (size.value * 0.38f).sp
+            Text(initials(name), color = hue, style = T.headline.copy(fontSize = fs, lineHeight = fs, letterSpacing = 0.sp))
+        }
+    }
+}
+
