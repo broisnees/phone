@@ -56,3 +56,25 @@ class Store(private val ctx: Context, private val scope: CoroutineScope) {
         prefs.edit().putInt("call_sim", sim.subId).apply()
     }
 
+    fun simFor(subId: Int): Sim? = sims.firstOrNull { it.subId == subId }
+
+    fun simName(accountId: String?): String? =
+        if (sims.size < 2) null else sims.firstOrNull { it.subId.toString() == accountId }?.name
+
+    private val observers = mutableListOf<ContentObserver>()
+    private val pending = HashMap<String, Job>()
+
+    fun start() {
+        reloadAll()
+        watch(ContactsContract.Contacts.CONTENT_URI, "contacts") { loadContacts() }
+        watch(CallLog.Calls.CONTENT_URI, "calls") { loadCalls() }
+        watch(Telephony.Sms.CONTENT_URI, "sms") { loadSms() }
+    }
+
+    fun stop() = observers.forEach { ctx.contentResolver.unregisterContentObserver(it) }
+
+    fun reloadAll() {
+        scope.launch { sims = withContext(Dispatchers.IO) { Repo.sims(ctx) } }
+        loadContacts(); loadCalls(); loadSms()
+    }
+
