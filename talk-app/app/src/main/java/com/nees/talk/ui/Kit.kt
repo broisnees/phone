@@ -396,3 +396,74 @@ fun Avatar(name: String, photo: String?, size: Dp = S.avatar) {
     }
 }
 
+fun initials(name: String): String {
+    val words = name.split(' ').filter { it.firstOrNull()?.isLetter() == true }
+    return when {
+        words.isEmpty() -> "#"
+        words.size == 1 -> words[0].take(1).uppercase()
+        else -> (words.first().take(1) + words.last().take(1)).uppercase()
+    }
+}
+
+// ============================================================ Swipe row
+
+/**
+ * Horizontal swipe with a revealed action on each side. Crossing the threshold ticks once;
+ * releasing past it (or flicking fast) commits. Drag past the threshold meets friction.
+ */
+@Composable
+fun SwipeRow(
+    modifier: Modifier = Modifier,
+    startAction: SwipeAction?,
+    endAction: SwipeAction?,
+    content: @Composable () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val haptics = rememberHaptics()
+    val threshold = with(LocalDensity.current) { 88.dp.toPx() }
+    val offset = remember { Animatable(0f) }
+    var armed = remember { booleanArrayOf(false) }
+    var startTime = remember { longArrayOf(0L) }
+
+    Box(modifier) {
+        val action = if (offset.value > 0) startAction else endAction
+        if (action != null && offset.value != 0f) {
+            Row(
+                Modifier.matchParentSize().background(action.color).padding(horizontal = S.xl),
+                horizontalArrangement = if (offset.value > 0) Arrangement.Start else Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val reached = abs(offset.value) >= threshold
+                val s by animateFloatAsState(if (reached) 1f else 0.85f, tween(150, easing = EaseOut), label = "swipeIcon")
+                Icon(action.icon, action.label, tint = Color.White, modifier = Modifier.size(24.dp).graphicsLayer { scaleX = s; scaleY = s })
+            }
+        }
+        Box(
+            Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }.pointerInput(startAction, endAction) {
+                detectHorizontalDragGestures(
+                    onDragStart = { startTime[0] = System.currentTimeMillis(); armed[0] = false },
+                    onDragEnd = {
+                        val v = abs(offset.value) / (System.currentTimeMillis() - startTime[0]).coerceAtLeast(1)
+                        val commit = abs(offset.value) >= threshold || v > 1.2f
+                        val target = if (offset.value > 0) startAction else endAction
+                        scope.launch {
+                            if (commit && target != null) { haptics(target.haptic); target.onCommit() }
+                            offset.animateTo(0f, tween(220, easing = EaseOut))
+                        }
+                    },
+                    onDragCancel = { scope.launch { offset.animateTo(0f, tween(220, easing = EaseOut)) } },
+                ) { change, drag ->
+                    change.consume()
+                    val raw = offset.value + drag
+                    if ((raw > 0 && startAction == null) || (raw < 0 && endAction == null)) return@detectHorizontalDragGestures
+                    // Friction past the threshold instead of a hard stop.
+                    val next = if (abs(raw) > threshold) offset.value + drag * 0.35f else raw
+                    val nowArmed = abs(next) >= threshold
+                    if (nowArmed != armed[0]) { armed[0] = nowArmed; if (nowArmed) haptics(Haptic.SELECT) }
+                    scope.launch { offset.snapTo(next) }
+                }
+            },
+        ) { content() }
+    }
+}
+
