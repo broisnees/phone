@@ -35,3 +35,24 @@ class Store(private val ctx: Context, private val scope: CoroutineScope) {
     var sims by mutableStateOf<List<Sim>>(emptyList()); private set
     var pinned by mutableStateOf(Prefs.pinned(ctx)); private set
 
+    fun togglePin(threadId: Long) {
+        Prefs.togglePin(ctx, threadId)
+        pinned = Prefs.pinned(ctx)
+    }
+
+    /** Smart-inbox bucket for each conversation, from its latest message. */
+    fun categoryOf(c: Conversation): Category = Classifier.of(c.address, c.last.body, directory.find(c.address) != null)
+
+    /** Bumped on every SMS change so an open thread reloads too. */
+    var smsVersion by mutableStateOf(0); private set
+
+    private val prefs = ctx.getSharedPreferences("talk", Context.MODE_PRIVATE)
+    var callSimId by mutableStateOf(prefs.getInt("call_sim", -1)); private set
+
+    val callSim: Sim? get() = sims.firstOrNull { it.subId == callSimId } ?: sims.firstOrNull()
+
+    fun chooseCallSim(sim: Sim) {
+        callSimId = sim.subId
+        prefs.edit().putInt("call_sim", sim.subId).apply()
+    }
+
