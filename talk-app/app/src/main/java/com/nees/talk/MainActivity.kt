@@ -94,3 +94,47 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+sealed interface Route {
+    data class ContactRoute(val id: Long?, val number: String?) : Route
+    data class ThreadRoute(val threadId: Long, val address: String) : Route
+    data object NewMessage : Route
+}
+
+enum class Tab(val label: String, val on: ImageVector, val off: ImageVector) {
+    Calls("Calls", Icons.Filled.Call, Icons.Outlined.Call),
+    Chats("Chats", Icons.Filled.ChatBubble, Icons.Outlined.ChatBubbleOutline),
+    Contacts("Contacts", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle),
+    Keypad("Keypad", Icons.Filled.Dialpad, Icons.Outlined.Dialpad),
+}
+
+class MainActivity : ComponentActivity() {
+    /** Latest launch intent; Compose reacts to each new one. */
+    private val launch = mutableStateOf<Intent?>(null)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        launch.value = intent
+        setContent { TalkTheme { Root(launch.value) } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        launch.value = intent
+    }
+
+    companion object {
+        const val ACTION_OPEN_THREAD = "com.nees.talk.OPEN_THREAD"
+        const val ACTION_KEYPAD = "com.nees.talk.KEYPAD"
+        const val ACTION_CONTACTS = "com.nees.talk.CONTACTS"
+
+        val PERMISSIONS = arrayOf(
+            Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS,
+            Manifest.permission.READ_CALL_LOG, Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_PHONE_NUMBERS,
+            Manifest.permission.READ_SMS, Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.POST_NOTIFICATIONS,
+        )
+    }
+}
+
