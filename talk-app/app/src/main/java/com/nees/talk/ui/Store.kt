@@ -78,3 +78,30 @@ class Store(private val ctx: Context, private val scope: CoroutineScope) {
         loadContacts(); loadCalls(); loadSms()
     }
 
+    private fun loadContacts() = scope.launch {
+        val list = withContext(Dispatchers.IO) { runCatching { Repo.contacts(ctx) }.getOrDefault(emptyList()) }
+        contacts = list
+        directory = Directory(list)
+    }
+
+    private fun loadCalls() = scope.launch {
+        calls = withContext(Dispatchers.IO) { runCatching { Repo.calls(ctx) }.getOrDefault(emptyList()) }
+    }
+
+    private fun loadSms() = scope.launch {
+        conversations = withContext(Dispatchers.IO) { runCatching { Repo.conversations(ctx) }.getOrDefault(emptyList()) }
+        smsVersion++
+    }
+
+    /** Coalesces bursts of provider notifications into one reload. */
+    private fun watch(uri: android.net.Uri, key: String, reload: () -> Unit) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                pending[key]?.cancel()
+                pending[key] = scope.launch { delay(150); reload() }
+            }
+        }
+        ctx.contentResolver.registerContentObserver(uri, true, observer)
+        observers += observer
+    }
+}
