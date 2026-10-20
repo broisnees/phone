@@ -138,3 +138,55 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+private fun Root(intent: Intent?) {
+    val ctx = LocalContext.current
+    val roles = remember { ctx.getSystemService(RoleManager::class.java) }
+    fun ready() = roles.isRoleHeld(RoleManager.ROLE_DIALER) && roles.isRoleHeld(RoleManager.ROLE_SMS) &&
+        MainActivity.PERMISSIONS.all { ctx.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+
+    var onboarded by remember { mutableStateOf(ready()) }
+    if (!onboarded) Onboarding(roles) { onboarded = true } else App(intent)
+}
+
+@Composable
+private fun Onboarding(roles: RoleManager, onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    var tick by remember { mutableIntStateOf(0) }
+    val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { tick++ }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { tick++ }
+    val dialer = remember(tick) { roles.isRoleHeld(RoleManager.ROLE_DIALER) }
+    val sms = remember(tick) { roles.isRoleHeld(RoleManager.ROLE_SMS) }
+    val perms = remember(tick) { MainActivity.PERMISSIONS.all { ctx.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED } }
+
+    val ready = dialer && sms && perms
+    Column(
+        Modifier.fillMaxSize().background(C.bg).statusBarsPadding().navigationBarsPadding().padding(horizontal = S.edge),
+    ) {
+        Spacer(Modifier.weight(1f))
+        Box(Modifier.padding(start = S.xs).size(64.dp).clip(RoundedCornerShape(Radius.tile)).background(C.accentSoft), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Call, null, tint = C.accent, modifier = Modifier.size(30.dp))
+        }
+        Spacer(Modifier.height(S.xl))
+        Text("Welcome to Talk", style = T.display, color = C.text, modifier = Modifier.padding(start = S.xs))
+        Spacer(Modifier.height(S.s))
+        Text("Calls, contacts and messages — one calm place.", style = T.body, color = C.text2, modifier = Modifier.padding(start = S.xs))
+        Spacer(Modifier.height(S.xxl))
+        Card(Modifier.padding(horizontal = 0.dp)) {
+            Step("Default phone app", dialer) { roleLauncher.launch(roles.createRequestRoleIntent(RoleManager.ROLE_DIALER)) }
+            Hairline(start = S.pad)
+            Step("Default SMS app", sms) { roleLauncher.launch(roles.createRequestRoleIntent(RoleManager.ROLE_SMS)) }
+            Hairline(start = S.pad)
+            Step("Contacts, calls and messages access", perms) { permLauncher.launch(MainActivity.PERMISSIONS) }
+        }
+        Spacer(Modifier.weight(1f))
+        Box(
+            Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp))
+                .background(if (ready) C.accent else C.raised)
+                .pressable(if (ready) Haptic.SUCCESS else Haptic.NONE) { if (ready) onDone() },
+            contentAlignment = Alignment.Center,
+        ) { Text("Continue", style = T.headline, color = if (ready) C.onAccent else C.text3) }
+        Spacer(Modifier.height(S.l))
+    }
+}
+
