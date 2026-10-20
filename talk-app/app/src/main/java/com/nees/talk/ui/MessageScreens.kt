@@ -79,3 +79,79 @@ import kotlinx.coroutines.withContext
 
 // ============================================================ Inbox
 
+@Composable
+fun ChatsScreen(store: Store, nav: Nav) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var query by rememberSaveable { mutableStateOf("") }
+    var filter by rememberSaveable { mutableStateOf<Category?>(null) }
+    var confirmDelete by remember { mutableStateOf<Conversation?>(null) }
+
+    val bodyHits by produceState(emptySet<Long>(), query, store.smsVersion) {
+        val q = query.trim()
+        value = if (q.length < 2) emptySet() else withContext(Dispatchers.IO) { Repo.searchThreads(ctx, q) }
+    }
+    val categorized = remember(store.conversations, store.directory) { store.conversations.map { it to store.categoryOf(it) } }
+    val unreadBy = remember(categorized) { categorized.groupBy { it.second }.mapValues { (_, l) -> l.count { it.first.unread > 0 } } }
+    val visible = remember(categorized, filter, query, bodyHits) {
+        val q = query.trim()
+        categorized.filter { (c, cat) ->
+            (filter == null || cat == filter) &&
+                (q.isEmpty() || c.threadId in bodyHits || store.directory.name(c.address).contains(q, ignoreCase = true) || c.address.contains(q))
+        }.map { it.first }
+    }
+    val pinned = visible.filter { it.threadId in store.pinned }
+    val rest = visible.filter { it.threadId !in store.pinned }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = TabBarSpace) {
+        item {
+            ScreenTitle("Chats") { ComposeAction(nav::newMessage) }
+            SearchBar(query, { query = it }, "Search messages")
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = S.edge, vertical = S.m),
+                horizontalArrangement = Arrangement.spacedBy(S.s),
+            ) {
+                item { Chip("All", filter == null, store.conversations.count { it.unread > 0 }) { filter = null } }
+                items(Category.entries) { cat -> Chip(cat.label, filter == cat, unreadBy[cat] ?: 0) { filter = if (filter == cat) null else cat } }
+            }
+        }
+        if (visible.isEmpty()) {
+            item { EmptyState(Icons.Rounded.ChatBubbleOutline, if (query.isEmpty()) "Nothing here yet" else "No matches", "Start a conversation with the pencil button.") }
+        }
+        listOf("Pinned" to pinned, "Recent" to rest).forEach { (label, group) ->
+            if (group.isEmpty()) return@forEach
+            if (pinned.isNotEmpty()) item(key = "s-$label") { SectionLabel(label) }
+            itemsIndexed(group, key = { _, c -> c.threadId }) { i, c ->
+                Column(Modifier.cardSlice(i, group.size)) {
+                    SwipeRow(
+                        startAction = SwipeAction(Icons.Rounded.PushPin, if (c.threadId in store.pinned) "Unpin" else "Pin", C.accent.copy(alpha = 0.85f), Haptic.SUCCESS) {
+                            store.togglePin(c.threadId)
+                        },
+                        endAction = SwipeAction(Icons.Rounded.Delete, "Delete", C.red, Haptic.REJECT) { confirmDelete = c },
+                    ) {
+                        ConversationRow(c, store, nav) {
+                            scope.launch(Dispatchers.IO) { if (c.unread > 0) Repo.markRead(ctx, c.threadId) else Repo.markUnread(ctx, c.threadId) }
+                        }
+                    }
+                    if (i < group.lastIndex) Hairline()
+                }
+            }
+        }
+    }
+
+    confirmDelete?.let { c ->
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            containerColor = C.raised,
+            title = { Text("Delete conversation?", style = T.headline, color = C.text) },
+            text = { Text("All messages with ${store.directory.name(c.address)} will be removed from this phone.", style = T.sub, color = C.text2) },
+            confirmButton = {
+                TextButton({ scope.launch(Dispatchers.IO) { Repo.deleteThread(ctx, c.threadId) }; confirmDelete = null }) {
+                    Text("Delete", style = T.headline, color = C.red)
+                }
+            },
+            dismissButton = { TextButton({ confirmDelete = null }) { Text("Cancel", style = T.headline, color = C.text) } },
+        )
+    }
+}
+
