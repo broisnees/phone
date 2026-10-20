@@ -263,3 +263,59 @@ fun ThreadScreen(store: Store, nav: Nav, threadId: Long, address: String) {
     }
 }
 
+@Composable
+private fun ThreadHeader(name: String, contact: Contact?, address: String, nav: Nav) {
+    Column(Modifier.fillMaxWidth().background(C.bg)) {
+        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        Row(Modifier.fillMaxWidth().padding(horizontal = S.edge, vertical = S.s), verticalAlignment = Alignment.CenterVertically) {
+            CircleAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back") { nav.back() }
+            Spacer(Modifier.width(S.m))
+            Row(
+                Modifier.weight(1f).clip(RoundedCornerShape(Radius.tile)).pressable(Haptic.LIGHT) { nav.contact(contact, address) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Avatar(name, contact?.photo, 40.dp)
+                Spacer(Modifier.width(S.m))
+                Column {
+                    Text(name, style = T.headline, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(NumberIntel.label(address), style = T.caption, color = C.text2, maxLines = 1)
+                }
+            }
+            Spacer(Modifier.width(S.s))
+            CircleAction(Icons.Rounded.Call, "Call", tint = C.accent, haptic = Haptic.SUCCESS) { nav.call(address) }
+        }
+    }
+}
+
+@Composable
+private fun Bubble(m: Sms, last: Boolean, onDelete: () -> Unit) {
+    val out = m.outgoing
+    val big = 20.dp
+    val tight = 6.dp
+    // The corner facing the next bubble from the same sender tightens, so a burst reads as one block.
+    val shape = if (out) RoundedCornerShape(big, big, if (last) big else tight, big)
+    else RoundedCornerShape(big, big, big, if (last) big else tight)
+    val bg = when { !out -> C.raised; m.failed -> C.redSoft; else -> C.accent }
+    val fg = if (out && !m.failed) C.onAccent else C.text
+    val code = remember(m.body) { if (!out) Otp.find(m.body) else null }
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = S.edge, vertical = if (last) 4.dp else 1.dp),
+        horizontalAlignment = if (out) Alignment.End else Alignment.Start,
+    ) {
+        Box(
+            Modifier.widthIn(max = 296.dp).clip(shape).rowPress(bg, onLongClick = onDelete) {}.padding(horizontal = 14.dp, vertical = 10.dp),
+        ) { Text(m.body, style = T.body, color = fg) }
+        if (code != null) {
+            Spacer(Modifier.height(6.dp))
+            CodeChip(code)
+        }
+        if (out && last && (m.failed || m.pending)) {
+            Text(
+                if (m.failed) "Not delivered · long-press to delete" else "Sending…",
+                style = T.caption, color = if (m.failed) C.red else C.text3,
+                modifier = Modifier.padding(top = S.xs, end = S.xs),
+            )
+        }
+    }
+}
+
