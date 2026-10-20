@@ -219,3 +219,47 @@ fun CodeChip(code: String) {
 
 // ============================================================ Thread
 
+@Composable
+fun ThreadScreen(store: Store, nav: Nav, threadId: Long, address: String) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val contact = store.directory.find(address)
+    val name = contact?.name ?: address
+    val messages by produceState(emptyList<Sms>(), threadId, store.smsVersion) {
+        value = withContext(Dispatchers.IO) { Repo.thread(ctx, threadId) }
+    }
+    var sim by remember(threadId) { mutableStateOf<Sim?>(null) }
+    val activeSim = sim ?: messages.lastOrNull()?.subId?.let(store::simFor)
+        ?: store.simFor(SmsManager.getDefaultSmsSubscriptionId()) ?: store.sims.firstOrNull()
+
+    LaunchedEffect(threadId, messages.size) {
+        withContext(Dispatchers.IO) { Repo.markRead(ctx, threadId) }
+        ctx.getSystemService(NotificationManager::class.java).cancel(threadId.toInt())
+    }
+
+    Column(Modifier.fillMaxSize().background(C.bg).imePadding()) {
+        ThreadHeader(name, contact, address, nav)
+        val listState = rememberLazyListState()
+        LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex) }
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(vertical = S.s)) {
+            itemsIndexed(messages, key = { _, m -> m.id }) { i, m ->
+                val prev = messages.getOrNull(i - 1)
+                val next = messages.getOrNull(i + 1)
+                if (prev == null || m.date - prev.date > 60 * 60 * 1000) {
+                    Text(
+                        "${dayLabel(m.date)} · ${clockTime(m.date)}", style = T.caption.tabular(), color = C.text3, textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(top = S.l, bottom = S.s),
+                    )
+                }
+                val joinsNext = next != null && next.outgoing == m.outgoing && next.date - m.date < 60_000
+                Bubble(m, last = !joinsNext) { scope.launch(Dispatchers.IO) { Repo.deleteSms(ctx, m.id) } }
+            }
+        }
+        val showTemplates = messages.lastOrNull()?.outgoing == false
+        Composer(store.sims, activeSim, { sim = it }, showTemplates) { text ->
+            val s = activeSim ?: return@Composer
+            scope.launch(Dispatchers.IO) { Repo.sendSms(ctx, address, text, s.subId) }
+        }
+    }
+}
+
