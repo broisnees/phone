@@ -155,3 +155,67 @@ fun ChatsScreen(store: Store, nav: Nav) {
     }
 }
 
+@Composable
+private fun ConversationRow(c: Conversation, store: Store, nav: Nav, onLong: () -> Unit) {
+    val contact = store.directory.find(c.address)
+    val name = contact?.name ?: c.address
+    val unread = c.unread > 0
+    val code = remember(c.last.body) { if (!c.last.outgoing) Otp.find(c.last.body) else null }
+    Row(
+        Modifier.fillMaxWidth().rowPress(onLongClick = onLong) { nav.thread(c.threadId, c.address) }
+            .padding(horizontal = S.pad, vertical = S.m),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Avatar(name, contact?.photo)
+        Spacer(Modifier.width(S.m))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    name, style = T.headline.copy(fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold),
+                    color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                if (c.threadId in store.pinned) {
+                    Icon(Icons.Rounded.PushPin, "Pinned", tint = C.text3, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(S.xs))
+                }
+                Text(relativeTime(c.last.date), style = T.caption.tabular(), color = if (unread) C.accent else C.text3)
+            }
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    (if (c.last.outgoing) "You: " else "") + c.last.body,
+                    style = T.sub, color = if (unread) C.text else C.text2,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                if (unread) {
+                    Spacer(Modifier.width(S.s))
+                    Box(Modifier.padding(top = 4.dp).size(10.dp).clip(CircleShape).background(C.accent))
+                }
+            }
+            if (code != null) {
+                Spacer(Modifier.height(S.s))
+                CodeChip(code)
+            }
+        }
+    }
+}
+
+/** One-tap copy for a detected one-time code. */
+@Composable
+fun CodeChip(code: String) {
+    val ctx = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+    Row(
+        Modifier.height(32.dp).clip(CircleShape).background(C.accentSoft)
+            .pressable(Haptic.SUCCESS) { Otp.copy(ctx, code); copied = true }
+            .padding(horizontal = S.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.ContentCopy, null, tint = C.accent, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(if (copied) "Copied" else "Copy $code", style = T.sub.copy(fontWeight = FontWeight.SemiBold).tabular(), color = C.accent)
+    }
+}
+
+// ============================================================ Thread
+
