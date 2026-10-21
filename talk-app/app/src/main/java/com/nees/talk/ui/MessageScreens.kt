@@ -357,3 +357,63 @@ private fun Composer(sims: List<Sim>, sim: Sim?, onSim: (Sim) -> Unit, showTempl
 
 // ============================================================ New message
 
+@Composable
+fun NewMessageScreen(store: Store, nav: Nav) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var to by rememberSaveable { mutableStateOf("") }
+    val suggestions = remember(to, store.contacts) {
+        val q = to.trim()
+        val digits = q.filter(Char::isDigit)
+        if (q.isEmpty()) emptyList()
+        else store.contacts.flatMap { c -> c.numbers.map { c to it } }.filter { (c, n) ->
+            c.name.contains(q, ignoreCase = true) || (digits.isNotEmpty() && numberKey(n.number).contains(digits))
+        }.take(30)
+    }
+    fun open(number: String) = scope.launch {
+        val t = withContext(Dispatchers.IO) { Repo.threadIdFor(ctx, number) }
+        nav.back()
+        nav.thread(t, number)
+    }
+    Column(Modifier.fillMaxSize().background(C.bg).imePadding()) {
+        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        Row(Modifier.fillMaxWidth().padding(horizontal = S.edge, vertical = S.s), verticalAlignment = Alignment.CenterVertically) {
+            CircleAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back") { nav.back() }
+            Spacer(Modifier.width(S.m))
+            Text("New message", style = T.headline, color = C.text)
+        }
+        Row(
+            Modifier.padding(horizontal = S.edge, vertical = S.s).fillMaxWidth().height(48.dp)
+                .clip(RoundedCornerShape(Radius.field)).background(C.raised).padding(horizontal = S.l),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("To", style = T.body, color = C.text3)
+            Spacer(Modifier.width(S.m))
+            Box(Modifier.weight(1f)) {
+                if (to.isEmpty()) Text("Name or number", style = T.body, color = C.text3)
+                BasicTextField(to, { to = it }, singleLine = true, textStyle = T.body.copy(color = C.text), cursorBrush = SolidColor(C.accent), modifier = Modifier.fillMaxWidth())
+            }
+            if (to.count(Char::isDigit) >= 5) {
+                Text("Next", style = T.headline, color = C.accent, modifier = Modifier.pressable(Haptic.SUCCESS) { open(to.trim()) })
+            }
+        }
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = S.s)) {
+            itemsIndexed(suggestions, key = { _, (c, n) -> "${c.id}-${n.number}" }) { i, (c, n) ->
+                Column(Modifier.cardSlice(i, suggestions.size)) {
+                    Row(
+                        Modifier.fillMaxWidth().rowPress { open(n.number) }.padding(horizontal = S.pad, vertical = S.m),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Avatar(c.name, c.photo)
+                        Spacer(Modifier.width(S.m))
+                        Column {
+                            Text(c.name, style = T.headline, color = C.text)
+                            Text("${n.label} · ${n.number}", style = T.sub.tabular(), color = C.text2)
+                        }
+                    }
+                    if (i < suggestions.lastIndex) Hairline()
+                }
+            }
+        }
+    }
+}
