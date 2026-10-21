@@ -319,3 +319,41 @@ private fun Bubble(m: Sms, last: Boolean, onDelete: () -> Unit) {
     }
 }
 
+@Composable
+private fun Composer(sims: List<Sim>, sim: Sim?, onSim: (Sim) -> Unit, showTemplates: Boolean, onSend: (String) -> Unit) {
+    var text by rememberSaveable { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth().background(C.bg).navigationBarsPadding()) {
+        if (showTemplates && text.isEmpty()) {
+            LazyRow(contentPadding = PaddingValues(horizontal = S.edge), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+                items(Prefs.templates) { t -> Chip(t, selected = false) { text = t } }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = S.edge, vertical = S.s), verticalAlignment = Alignment.Bottom) {
+            Row(
+                Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(Radius.field)).background(C.raised)
+                    .padding(start = S.l, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Box(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                    if (text.isEmpty()) Text("Message", style = T.body, color = C.text3)
+                    BasicTextField(
+                        text, { text = it }, textStyle = T.body.copy(color = C.text), cursorBrush = SolidColor(C.accent),
+                        maxLines = 6, modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (sims.size > 1) SimChip(sims, sim, onSim)
+            }
+            Spacer(Modifier.width(S.s))
+            val ready = text.isNotBlank()
+            val shown by animateFloatAsState(if (ready) 1f else 0.4f, tween(150, easing = EaseOut), label = "send")
+            Box(
+                Modifier.size(44.dp).graphicsLayer { alpha = shown }.clip(CircleShape).background(if (ready) C.accent else C.raised)
+                    .then(if (ready) Modifier.pressable(Haptic.SUCCESS) { onSend(text.trim()); text = "" } else Modifier),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.ArrowUpward, "Send", tint = if (ready) C.onAccent else C.text3, modifier = Modifier.size(22.dp)) }
+        }
+    }
+}
+
+// ============================================================ New message
+
