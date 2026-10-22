@@ -91,3 +91,43 @@ import java.time.format.FormatStyle
 import java.time.format.TextStyle as JTextStyle
 import java.util.Locale
 
+interface Nav {
+    fun call(number: String)
+    fun contact(contact: Contact?, number: String?)
+    fun thread(threadId: Long, address: String)
+    fun newMessage()
+    fun back()
+}
+
+private val zone = ZoneId.systemDefault()
+private val timeFmt = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+private val dateFmt = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+
+/** "10:41", "Yesterday", "Tuesday", or a date. */
+fun relativeTime(ms: Long): String {
+    val t = Instant.ofEpochMilli(ms).atZone(zone)
+    val days = LocalDate.now(zone).toEpochDay() - t.toLocalDate().toEpochDay()
+    return when {
+        days == 0L -> t.format(timeFmt)
+        days == 1L -> "Yesterday"
+        days < 7 -> t.dayOfWeek.getDisplayName(JTextStyle.SHORT, Locale.getDefault())
+        else -> t.format(DateTimeFormatter.ofPattern("d MMM"))
+    }
+}
+
+fun clockTime(ms: Long): String = Instant.ofEpochMilli(ms).atZone(zone).format(timeFmt)
+
+/** Day bucket used for section labels: Today / Yesterday / weekday / date. */
+fun dayLabel(ms: Long): String {
+    val d = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
+    val days = LocalDate.now(zone).toEpochDay() - d.toEpochDay()
+    return when {
+        days == 0L -> "Today"
+        days == 1L -> "Yesterday"
+        days < 7 -> d.dayOfWeek.getDisplayName(JTextStyle.FULL, Locale.getDefault())
+        else -> d.format(dateFmt)
+    }
+}
+
+// ============================================================ Calls (favourites + recents)
+
