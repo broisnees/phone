@@ -131,3 +131,44 @@ fun dayLabel(ms: Long): String {
 
 // ============================================================ Calls (favourites + recents)
 
+@Composable
+fun CallsScreen(store: Store, nav: Nav) {
+    var missedOnly by rememberSaveable { mutableStateOf(false) }
+    val favorites = remember(store.contacts) { store.contacts.filter { it.starred } }
+    val list = remember(store.calls, missedOnly) { if (missedOnly) store.calls.filter { it.missed } else store.calls }
+    val byDay = remember(list) { list.groupBy { dayLabel(it.date) }.toList() }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = TabBarSpace) {
+        item { ScreenTitle("Calls") }
+        if (favorites.isNotEmpty()) {
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = S.edge),
+                    horizontalArrangement = Arrangement.spacedBy(S.m),
+                ) {
+                    items(favorites, key = { it.id }) { c -> FavoriteBubble(c, nav) }
+                }
+                Spacer(Modifier.height(S.s))
+            }
+        }
+        item {
+            Row(Modifier.padding(horizontal = S.edge, vertical = S.s), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+                Chip("All", !missedOnly) { missedOnly = false }
+                Chip("Missed", missedOnly, count = store.calls.takeWhile { it.missed }.size) { missedOnly = true }
+            }
+        }
+        if (list.isEmpty()) {
+            item { EmptyState(Icons.Rounded.Schedule, if (missedOnly) "No missed calls" else "No calls yet", "Calls you make and receive show up here.") }
+        }
+        byDay.forEach { (day, entries) ->
+            item(key = "d-$day") { SectionLabel(day) }
+            itemsIndexed(entries, key = { _, e -> "${e.date}-${e.number}" }) { i, e ->
+                Column(Modifier.cardSlice(i, entries.size)) {
+                    RecentRow(e, store, nav)
+                    if (i < entries.lastIndex) Hairline()
+                }
+            }
+        }
+    }
+}
+
