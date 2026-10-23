@@ -226,3 +226,51 @@ private fun RecentRow(e: CallEntry, store: Store, nav: Nav) {
 
 // ============================================================ Contacts
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ContactsScreen(store: Store, nav: Nav) {
+    val ctx = LocalContext.current
+    var query by rememberSaveable { mutableStateOf("") }
+    val filtered = remember(store.contacts, query) {
+        val q = query.trim()
+        val digits = q.filter(Char::isDigit)
+        if (q.isEmpty()) store.contacts
+        else store.contacts.filter { c ->
+            c.name.contains(q, ignoreCase = true) || (digits.isNotEmpty() && c.numbers.any { numberKey(it.number).contains(digits) })
+        }
+    }
+    val sections = remember(filtered) {
+        filtered.groupBy { c -> c.name.firstOrNull()?.uppercaseChar()?.takeIf { it.isLetter() } ?: '#' }.toSortedMap().toList()
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = TabBarSpace) {
+        item {
+            ScreenTitle("Contacts") {
+                CircleAction(Icons.Rounded.PersonAdd, "New contact") {
+                    ctx.startActivity(Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI))
+                }
+            }
+            SearchBar(query, { query = it }, "Search ${store.contacts.size} contacts")
+        }
+        if (filtered.isEmpty()) item { EmptyState(Icons.Rounded.Search, if (query.isEmpty()) "No contacts" else "No matches", "Try another name or number.") }
+        sections.forEach { (letter, group) ->
+            stickyHeader(key = "h$letter") { SectionLabel(letter.toString()) }
+            itemsIndexed(group, key = { _, c -> c.id }) { i, c ->
+                Column(Modifier.cardSlice(i, group.size)) {
+                    Row(
+                        Modifier.fillMaxWidth().rowPress { nav.contact(c, null) }.padding(horizontal = S.pad, vertical = S.m),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Avatar(c.name, c.photo)
+                        Spacer(Modifier.width(S.m))
+                        Text(c.name, style = T.body, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        if (c.starred) Icon(Icons.Rounded.Star, "Favorite", tint = C.accent, modifier = Modifier.size(16.dp))
+                    }
+                    if (i < group.lastIndex) Hairline()
+                }
+            }
+        }
+    }
+}
+
+// ============================================================ Keypad
+
