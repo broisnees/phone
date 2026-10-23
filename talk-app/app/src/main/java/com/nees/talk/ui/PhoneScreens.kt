@@ -274,3 +274,100 @@ fun ContactsScreen(store: Store, nav: Nav) {
 
 // ============================================================ Keypad
 
+private val keyLetters = linkedMapOf(
+    '1' to "", '2' to "ABC", '3' to "DEF", '4' to "GHI", '5' to "JKL", '6' to "MNO",
+    '7' to "PQRS", '8' to "TUV", '9' to "WXYZ", '*' to "", '0' to "+", '#' to "",
+)
+
+private val t9: Map<Char, Char> = buildMap {
+    keyLetters.forEach { (digit, letters) -> letters.forEach { put(it.lowercaseChar(), digit) } }
+}
+
+/** True if any word of [name] starts with the T9 digit sequence [digits]. */
+private fun t9Match(name: String, digits: String): Boolean =
+    name.lowercase().split(' ', '-', '.').any { w -> w.length >= digits.length && w.take(digits.length).map { t9[it] ?: it }.joinToString("") == digits }
+
+@Composable
+fun KeypadScreen(store: Store, nav: Nav, initial: String) {
+    val ctx = LocalContext.current
+    var number by rememberSaveable(initial) { mutableStateOf(initial) }
+    val tonesOn = remember { Settings.System.getInt(ctx.contentResolver, Settings.System.DTMF_TONE_WHEN_DIALING, 1) == 1 }
+    val tones = remember { if (tonesOn) runCatching { ToneGenerator(AudioManager.STREAM_DTMF, 70) }.getOrNull() else null }
+    val suggestions = remember(number, store.contacts) {
+        val digits = number.filter(Char::isDigit)
+        if (digits.length < 2) emptyList()
+        else store.contacts.flatMap { c -> c.numbers.map { c to it } }
+            .filter { (c, n) -> numberKey(n.number).contains(digits) || t9Match(c.name, digits) }
+            .distinctBy { it.first.id }.take(3)
+    }
+    val info = remember(number) { if (number.length >= 7) NumberIntel.label(number) else "" }
+
+    Column(Modifier.fillMaxSize().padding(TabBarSpace), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        // Suggestions float at the top so the keypad never jumps.
+        Column(Modifier.fillMaxWidth().weight(1f).padding(top = S.l)) {
+            if (suggestions.isNotEmpty()) {
+                Card {
+                    suggestions.forEachIndexed { i, (c, n) ->
+                        Row(
+                            Modifier.fillMaxWidth().rowPress { nav.call(n.number) }.padding(horizontal = S.pad, vertical = S.m),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Avatar(c.name, c.photo, 36.dp)
+                            Spacer(Modifier.width(S.m))
+                            Column(Modifier.weight(1f)) {
+                                Text(c.name, style = T.headline, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${n.label} · ${n.number}", style = T.sub.tabular(), color = C.text2, maxLines = 1)
+                            }
+                        }
+                        if (i < suggestions.lastIndex) Hairline(start = S.pad + 36.dp + S.m)
+                    }
+                }
+            }
+        }
+        Text(
+            number.ifEmpty { " " },
+            style = T.display.copy(fontSize = if (number.length > 13) 26.sp else 34.sp, lineHeight = 40.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.sp).tabular(),
+            color = C.text, maxLines = 1, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = S.xl),
+        )
+        Box(Modifier.height(S.xl), contentAlignment = Alignment.Center) {
+            if (info.isNotEmpty()) Text(info, style = T.sub, color = C.text2)
+        }
+        Spacer(Modifier.height(S.m))
+        Column(verticalArrangement = Arrangement.spacedBy(S.m)) {
+            keyLetters.keys.chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(S.xl)) {
+                    row.forEach { k ->
+                        DialKey(k, keyLetters.getValue(k), onLong = if (k == '0') ({ number += "+" }) else null) {
+                            number += k
+                            tones?.startTone(dtmfTone(k), 100)
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(S.l))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(S.xl)) {
+            Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) { SimChip(store.sims, store.callSim, store::chooseCallSim) }
+            Box(
+                Modifier.size(72.dp).clip(CircleShape).background(C.green).pressable(Haptic.SUCCESS) {
+                    if (number.isNotEmpty()) nav.call(number)
+                    else store.calls.firstOrNull { it.type == CallLog.Calls.OUTGOING_TYPE }?.let { number = it.number }
+                },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.Call, "Call", tint = Color.White, modifier = Modifier.size(30.dp)) }
+            Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+                val shown by animateFloatAsState(if (number.isNotEmpty()) 1f else 0f, tween(150, easing = EaseOut), label = "del")
+                Icon(
+                    Icons.Rounded.Backspace, "Delete", tint = C.text2,
+                    modifier = Modifier.size(48.dp)
+                        .graphicsLayer { alpha = shown; val s = 0.25f + 0.75f * shown; scaleX = s; scaleY = s }
+                        .then(if (number.isNotEmpty()) Modifier.pressable(Haptic.SELECT, onLongClick = { number = "" }) { number = number.dropLast(1) } else Modifier)
+                        .padding(S.m),
+                )
+            }
+        }
+    }
+}
+
