@@ -172,3 +172,57 @@ fun CallsScreen(store: Store, nav: Nav) {
     }
 }
 
+@Composable
+private fun FavoriteBubble(c: Contact, nav: Nav) {
+    Column(
+        Modifier.width(64.dp).pressable(Haptic.SUCCESS, onLongClick = { nav.contact(c, null) }) {
+            c.numbers.firstOrNull()?.let { nav.call(it.number) }
+        },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Avatar(c.name, c.photo, 56.dp)
+        Spacer(Modifier.height(6.dp))
+        Text(c.name.substringBefore(' '), style = T.caption, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun RecentRow(e: CallEntry, store: Store, nav: Nav) {
+    val contact = store.directory.find(e.number)
+    val name = contact?.name ?: e.number.ifBlank { "Unknown" }
+    val (icon, tint) = when (e.type) {
+        CallLog.Calls.OUTGOING_TYPE -> Icons.AutoMirrored.Rounded.CallMade to C.text3
+        CallLog.Calls.INCOMING_TYPE -> Icons.AutoMirrored.Rounded.CallReceived to C.text3
+        else -> Icons.AutoMirrored.Rounded.CallMissed to C.red
+    }
+    val detail = listOfNotNull(
+        if (contact != null) contact.numbers.firstOrNull { numberKey(it.number) == numberKey(e.number) }?.label else NumberIntel.label(e.number),
+        store.simName(e.accountId),
+    ).joinToString(" · ")
+
+    Row(
+        Modifier.fillMaxWidth().rowPress { nav.call(e.number) }.padding(start = S.pad, end = S.s, top = S.m, bottom = S.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(name, contact?.photo)
+        Spacer(Modifier.width(S.m))
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (e.count > 1) "$name  ${e.count}" else name,
+                style = T.headline, color = if (e.missed) C.red else C.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, null, tint = tint, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(S.xs))
+                Text("${clockTime(e.date)} · $detail", style = T.sub.tabular(), color = C.text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Box(Modifier.size(40.dp).pressable(Haptic.LIGHT) { nav.contact(contact, e.number) }, contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Info, "Details", tint = C.text2, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+// ============================================================ Contacts
+
