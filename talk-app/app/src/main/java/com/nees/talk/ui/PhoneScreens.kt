@@ -371,3 +371,128 @@ fun KeypadScreen(store: Store, nav: Nav, initial: String) {
     }
 }
 
+@Composable
+private fun DialKey(digit: Char, letters: String, onLong: (() -> Unit)?, onTap: () -> Unit) {
+    Box(
+        Modifier.size(72.dp).clip(CircleShape).background(C.raised).pressable(Haptic.KEY, onLongClick = onLong, onClick = onTap),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(digit.toString(), style = T.title.copy(fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Normal, letterSpacing = 0.sp), color = C.text)
+            Text(letters.ifEmpty { " " }, style = T.label.copy(fontSize = 9.sp, lineHeight = 11.sp, letterSpacing = 1.4.sp), color = C.text3)
+        }
+    }
+}
+
+// ============================================================ Contact / number detail
+
+@Composable
+fun ContactDetail(store: Store, nav: Nav, contactId: Long?, number: String?) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val contact = contactId?.let { id -> store.contacts.firstOrNull { it.id == id } }
+    val name = contact?.name ?: number ?: "Unknown"
+    val numbers = contact?.numbers ?: listOfNotNull(number?.let { PhoneNum(it, NumberIntel.of(it).kind.lowercase()) })
+    val primary = numbers.firstOrNull()?.number
+    var blockVersion by remember { mutableIntStateOf(0) }
+    val blocked by produceState(false, primary, blockVersion) {
+        value = primary?.let { withContext(Dispatchers.IO) { Blocker.isBlocked(ctx, it) } } ?: false
+    }
+    val history = remember(store.calls, numbers) {
+        val keys = numbers.map { numberKey(it.number) }.toSet()
+        store.calls.filter { numberKey(it.number) in keys }.take(6)
+    }
+    fun openThread(n: String) = scope.launch {
+        val t = withContext(Dispatchers.IO) { Repo.threadIdFor(ctx, n) }
+        nav.thread(t, n)
+    }
+
+    LazyColumn(Modifier.fillMaxSize().background(C.bg), contentPadding = PaddingValues(bottom = S.xxl)) {
+        item {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            Row(Modifier.fillMaxWidth().padding(horizontal = S.edge, vertical = S.s), verticalAlignment = Alignment.CenterVertically) {
+                CircleAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back") { nav.back() }
+                Spacer(Modifier.weight(1f))
+                if (contact != null) {
+                    CircleAction(Icons.Rounded.Edit, "Edit") {
+                        val uri = ContactsContract.Contacts.getLookupUri(ctx.contentResolver, ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contact.id))
+                        ctx.startActivity(Intent(Intent.ACTION_EDIT, uri))
+                    }
+                }
+            }
+            Column(Modifier.fillMaxWidth().padding(top = S.l), horizontalAlignment = Alignment.CenterHorizontally) {
+                Avatar(name, contact?.photo, 96.dp)
+                Spacer(Modifier.height(S.l))
+                Text(name, style = T.title, color = C.text, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = S.xl))
+                primary?.let {
+                    Spacer(Modifier.height(S.xs))
+                    Text(NumberIntel.label(it), style = T.sub, color = C.text2)
+                }
+            }
+            Spacer(Modifier.height(S.xl))
+            Row(Modifier.fillMaxWidth().padding(horizontal = S.edge), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+                ActionTile(Icons.Rounded.Call, "Call", Modifier.weight(1f), enabled = primary != null, haptic = Haptic.SUCCESS) { primary?.let(nav::call) }
+                ActionTile(Icons.Rounded.ChatBubble, "Message", Modifier.weight(1f), enabled = primary != null) { primary?.let(::openThread) }
+                if (contact != null) {
+                    ActionTile(
+                        if (contact.starred) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        if (contact.starred) "Favorite" else "Add favorite", Modifier.weight(1f), haptic = Haptic.SELECT,
+                    ) { scope.launch(Dispatchers.IO) { Repo.setStarred(ctx, contact.id, !contact.starred) } }
+                } else {
+                    ActionTile(Icons.Rounded.PersonAdd, "Save", Modifier.weight(1f)) {
+                        ctx.startActivity(Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI).putExtra(ContactsContract.Intents.Insert.PHONE, primary))
+                    }
+                }
+            }
+        }
+        item {
+            SectionLabel("Numbers")
+            Card {
+                numbers.forEachIndexed { i, n ->
+                    Row(
+                        Modifier.fillMaxWidth().rowPress(onLongClick = { openThread(n.number) }) { nav.call(n.number) }
+                            .padding(horizontal = S.pad, vertical = S.m),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(n.label.replaceFirstChar(Char::uppercase), style = T.sub, color = C.text2)
+                            Text(n.number, style = T.body.tabular(), color = C.text)
+                        }
+                        Icon(Icons.Rounded.Call, null, tint = C.accent, modifier = Modifier.size(20.dp))
+                    }
+                    if (i < numbers.lastIndex) Hairline(start = S.pad)
+                }
+            }
+        }
+        if (history.isNotEmpty()) item {
+            SectionLabel("History")
+            Card {
+                history.forEachIndexed { i, e ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = S.pad, vertical = S.m), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${dayLabel(e.date)}, ${clockTime(e.date)}", style = T.body.tabular(), color = C.text, modifier = Modifier.weight(1f))
+                        val kind = when { e.missed -> "Missed"; e.type == CallLog.Calls.OUTGOING_TYPE -> "Outgoing"; else -> "Incoming" }
+                        val dur = if (e.duration > 0) " · ${e.duration / 60}:${"%02d".format(e.duration % 60)}" else ""
+                        Text(kind + dur, style = T.sub.tabular(), color = if (e.missed) C.red else C.text2)
+                    }
+                    if (i < history.lastIndex) Hairline(start = S.pad)
+                }
+            }
+        }
+        if (primary != null) item {
+            SectionLabel("More")
+            Card {
+                DetailRow(Icons.Rounded.Search, "Look up this number", C.text) {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(primary))))
+                }
+                Hairline(start = S.pad + 20.dp + S.m)
+                DetailRow(Icons.Rounded.Block, if (blocked) "Unblock" else "Block and report spam", C.red) {
+                    scope.launch(Dispatchers.IO) {
+                        if (blocked) Blocker.unblock(ctx, primary) else Blocker.block(ctx, primary)
+                        blockVersion++
+                    }
+                }
+            }
+        }
+    }
+}
+
