@@ -42,3 +42,13 @@ Open problems / not possible:
 | Speed | 120 Hz locked, animations 0.3×, apps AOT-compiled, Smart Center disabled, FB/IG/X/Google Home background-restricted, debloat |
 | Banking | DenyList for 7 apps; Play Integrity: Basic only (keybox route) |
 
+## Device
+
+| | |
+|---|---|
+| Model | Nothing Phone (1) — A063, codename **Spacewar** |
+| Serial (adb) | [redacted] · fastboot: [redacted] |
+| Firmware | **V3.2-260618-1045** (Android 15, EOL build — no more OTAs) |
+| Fingerprint | `Nothing/Spacewar/Spacewar:15/AQ3A.240929.001/2606181045:user/release-keys` |
+| Partitions | A/B, active slot **_b**. Root goes to `boot` (no `init_boot` on this phone) |
+
