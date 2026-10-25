@@ -29,3 +29,16 @@ Open problems / not possible:
 - **Charge limit** (`nees_chargelimit`, source `chargelimit/`): pauses at 80 %, resumes at 75 % via `/sys/class/qcom-battery/usb_charger_en` (0 = charger input off, 1 = on). Change limits in `/data/adb/chargelimit.conf` (`PAUSE=`/`RESUME=`). Removing the module re-enables charging. ACC removed (it couldn't find a switch).
 - **AdAway**: active — 76,741 domains in the systemless hosts file (Magisk `hosts` module).
 
+## Status (2026-10-31)
+
+| Area | State |
+|---|---|
+| Root | Magisk 31.1, Zygisk, Vector (LSPosed) 2.2 |
+| Theme | AMOLED black overlay + self-healing watcher; rounded notification cards (`nees_notifstyle`) |
+| Haptics | Haptix v3 **enabled** (app launch, home, shade, QS, notification dismiss, volume); intensity Medium |
+| Shorts/Reels | Unscroll v2 **enabled** (YouTube, Instagram, Facebook) |
+| YouTube quality | MaxQ **enabled** (verified `1440p60 (was 720p60)`) |
+| Phone/SMS | Talk app (default dialer + SMS) |
+| Speed | 120 Hz locked, animations 0.3×, apps AOT-compiled, Smart Center disabled, FB/IG/X/Google Home background-restricted, debloat |
+| Banking | DenyList for 7 apps; Play Integrity: Basic only (keybox route) |
+
