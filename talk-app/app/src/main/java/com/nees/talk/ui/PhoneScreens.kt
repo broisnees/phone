@@ -496,3 +496,17 @@ fun ContactDetail(store: Store, nav: Nav, contactId: Long?, number: String?) {
     }
 }
 
+@Composable
+private fun DetailRow(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().rowPress(onClick = onClick).padding(horizontal = S.pad, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(S.m))
+        Text(label, style = T.body, color = color)
+    }
+}
+
+@Composable
+fun ComposeAction(onClick: () -> Unit) = CircleAction(Icons.Rounded.Edit, "New message", tint = C.accent, onClick = onClick)
