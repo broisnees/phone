@@ -52,3 +52,18 @@ Open problems / not possible:
 | Fingerprint | `Nothing/Spacewar/Spacewar:15/AQ3A.240929.001/2606181045:user/release-keys` |
 | Partitions | A/B, active slot **_b**. Root goes to `boot` (no `init_boot` on this phone) |
 
+## Current state
+
+| Item | Status |
+|---|---|
+| Bootloader | **Unlocked** (verified boot: orange) |
+| Root | **Magisk 31.1**, installed permanently to `boot_b` |
+| Shell root | Granted in Magisk → Superuser → Shell |
+| Zygisk | On |
+| Modules | Play Integrity Fix v4.9-inject-s (KOWX712), TrickyStore 1.4.1 (default AOSP keybox, `DeviceID="sw"`) |
+| TrickyStore targets | `com.google.android.gms`, `com.android.vending`, `com.google.android.gsf`, `gr.nikolasspyr.integritycheck` |
+| Tricky Addon | v4.4 (KOWX712, `install/TrickyAddonModule-v4.4.zip`) — hides itself as `/data/adb/modules/.TA_utl`, WebUI via KsuWebUI 1.0-34 (root granted in Magisk). Original AOSP keybox + target list backed up in `modules/trickystore-backup-2026-10-31/` |
+| Play Integrity | **Basic only** since the 2026-10-31 keybox route (was all UNEVALUATED); Device/Strong fail — see below |
+| DenyList (option A) | **Enforced** for eSewa, Nabil Bank, Khalti, MeroShare, Global IME (globalsmart), Nagarik App, Google Wallet |
+| AMOLED black | **On**: fabricated overlay `com.android.shell:amoled`, re-applied at boot by `/data/adb/service.d/amoled.sh` |
+
