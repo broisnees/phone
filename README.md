@@ -141,3 +141,14 @@ fastboot flashing lock
 
 OTA updates: none expected (EOL build). If one ever appears: Magisk → Uninstall → Restore images → install OTA (don't restart) → Magisk → Install → Install to inactive slot.
 
+## Useful commands
+
+```sh
+adb shell su -c 'magisk -v'                       # Magisk running?
+adb shell su -c 'ls /data/adb/modules'            # installed modules
+adb shell su -c 'magisk --sqlite "SELECT * FROM settings"'   # zygisk=1?
+bash scripts/backup.sh                            # re-run incremental backup
+```
+
+Note: `adb reboot ...` is blocked by this Mac's Claude hook; run it yourself with `!adb reboot bootloader`.
+
