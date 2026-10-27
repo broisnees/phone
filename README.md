@@ -67,3 +67,27 @@ Open problems / not possible:
 | DenyList (option A) | **Enforced** for eSewa, Nabil Bank, Khalti, MeroShare, Global IME (globalsmart), Nagarik App, Google Wallet |
 | AMOLED black | **On**: fabricated overlay `com.android.shell:amoled`, re-applied at boot by `/data/adb/service.d/amoled.sh` |
 
+## Folder contents
+
+| Path | What it is |
+|---|---|
+| `firmware/boot.img` | **Stock boot image — your recovery file. Never delete.** SHA-256 `57f19345…3d9e4e` (matches archive hash) |
+| `firmware/dtbo.img`, `vbmeta.img`, `vendor_boot.img` | Other stock boot-chain images, same build |
+| `firmware/*-image-boot.7z`, `*-hash.sha256` | Original download from [spike0en/nothing_archive](https://github.com/spike0en/nothing_archive/releases/tag/Spacewar_V3.2-260618-1045) |
+| `magisk/magisk_patched.img` | Stock boot patched with Magisk 31.1 (KEEPVERITY/KEEPFORCEENCRYPT=true). SHA-256 `e35a9202…3eaec7` |
+| `magisk/Magisk-v31.1.apk` | Official Magisk app (github.com/topjohnwu/Magisk) |
+| `modules/` | Play Integrity Fix + TrickyStore zips as installed |
+| `theme/amoled.xml` | AMOLED overlay colours (system backgrounds → `#000000`, cards → `#0b0b0b`–`#222222`). Copy on phone: `/data/system/amoled.xml` |
+| `theme/amoled-boot.sh` | Magisk boot script (`/data/adb/service.d/amoled.sh`). Every 5 s it checks the *effective* `system_background_dark`; if it isn't `#000000` (SystemUI regenerated its dynamic overlay on a theme change or a SystemUI restart) it re-stacks the black overlay on top |
+| `scripts/backup.sh` | Incremental phone → Mac backup (pulls only new/changed files into `~/phone-backup`) |
+| `install/` | **Every ready-to-install file**: Talk.apk, Haptix.apk, Unscroll.apk, MaxQ.apk, NotifStyle/InterFont Magisk zips, Magisk, Vector, PIF, TrickyStore, AdAway, Neo Backup, AFWall+, ACC, GCam configs |
+| `talk-app/` | Talk (dialer + SMS) source — Kotlin/Compose. Build: `gradle :app:assembleRelease`, then `cmd package compile -m speed -f com.nees.talk` |
+| `haptics-module/`, `unscroll/`, `maxq/` | Source of the three LSPosed modules (Haptix, Unscroll, MaxQ) |
+| `overlay-src/` | NotifStyle RRO source + test notification app |
+| `fonts/` | Inter 4.1 + the Inter system-font Magisk module source |
+| `camera/` | GCam AGC 9.1 V13 (snap) APK + Phone (1) configs |
+| `apps/` | Downloaded APKs (AdAway, Neo Backup, AFWall+, ACC) |
+| `phone-backup` | Shortcut (symlink) to `~/phone-backup` |
+
+Phone backup: **`~/phone-backup`** (65 GB — DCIM, Pictures/Screenshots, Movies, Documents, Download, WhatsApp media, Telegram). Taken 2026-10-30 before unlocking; 1 file skipped (a camera crash log).
+
