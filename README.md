@@ -91,3 +91,15 @@ Open problems / not possible:
 
 Phone backup: **`~/phone-backup`** (65 GB — DCIM, Pictures/Screenshots, Movies, Documents, Download, WhatsApp media, Telegram). Taken 2026-10-30 before unlocking; 1 file skipped (a camera crash log).
 
+## What was done (in order)
+
+1. Deleted `/sdcard/np4` (2× 3.1 GB leftover DSU system images).
+2. Mac cleanup (~52 GB freed): Docker images/cache (volumes kept), Claude `vm_bundles`, caches, Gradle caches, pnpm store, Ollama models.
+3. Backed up the phone with `scripts/backup.sh`.
+4. Downloaded the exact-build stock boot image and verified its hash.
+5. `fastboot flashing unlock` → phone wiped and set up again.
+6. Patched `boot.img` with Magisk's own `boot_patch.sh` over adb (the app's UI kept closing when driven remotely).
+7. `fastboot boot magisk_patched.img` (test boot) → Magisk → Install → **Direct install** → restarted. Root confirmed after restart.
+8. Granted Shell root, enabled Zygisk, installed Play Integrity Fix, refreshed its fingerprint.
+9. Integrity still failed → found keystore error, added TrickyStore → still UNEVALUATED.
+
