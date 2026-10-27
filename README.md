@@ -103,3 +103,16 @@ Phone backup: **`~/phone-backup`** (65 GB — DCIM, Pictures/Screenshots, Movies
 8. Granted Shell root, enabled Zygisk, installed Play Integrity Fix, refreshed its fingerprint.
 9. Integrity still failed → found keystore error, added TrickyStore → still UNEVALUATED.
 
+## Why Play Integrity fails (root cause)
+
+On Nothing/OnePlus/OPPO Qualcomm phones, **unlocking the bootloader makes the TEE switch to an alternate keystore that has no attestation key**. Logs:
+
+```
+keystore2: While generating Key without explicit attestation key. Error::Km(-10003)
+servicemanager: Could not find ...IRemotelyProvisionedComponent/default in the VINTF manifest
+```
+
+`-10003` = TEE can't open its attestation key. Since Android 13, Google requires hardware key attestation for **every** verdict (even Basic), so all verdicts come back UNEVALUATED. TrickyStore with the default AOSP key is rejected by Google. Play Store (45.0.21) and Play Services (26.42.31) are current, so they are not the cause. Widevine has likely dropped to L3 (Netflix/Prime in SD).
+
+2026-10-31: chose the **TrickyStore leaked-keybox route** (Tricky Addon → Keybox → Repo → TAKR 35 (TAKR 28 gave Basic only); security patch spoofed to 2026-10-05 in `/data/adb/tricky_store/security_patch.txt`). TrickyStore signs attestation in software with the keybox, so it works around the dead TEE key. It spoofs another device's identity and gets revoked by Google every few weeks; swapping `keybox.xml` back undoes it. Still avoided: KmInstallKeybox (one-time TEE provisioning, can't be undone).
+
