@@ -121,3 +121,23 @@ servicemanager: Could not find ...IRemotelyProvisionedComponent/default in the V
 - **A. Stay rooted + Magisk DenyList**: hide root from banking/wallet apps that only check for root on the phone (often local banks, eSewa, Khalti). Google Pay tap-to-pay, apps that check with Play Integrity, and Netflix HD will not work.
 - **B. Unroot + relock**: restores the original keystore → full integrity, Google Pay, Widevine L1. **Wipes the phone.** No root/theme.
 
+## Recovery commands
+
+Phone stuck on the logo (bootloop) — hold Power + Vol-Down for fastboot, then:
+```sh
+fastboot flash boot firmware/boot.img
+fastboot reboot
+```
+
+Unroot + relock (option B) — order matters. **Never relock while Magisk is flashed (can brick):**
+```sh
+# 1. Magisk → Modules: remove all; then restore stock boot
+adb reboot bootloader
+fastboot flash boot firmware/boot.img
+# 2. Relock (wipes the phone)
+fastboot flashing lock
+# 3. Set up, then restore files from ~/phone-backup
+```
+
+OTA updates: none expected (EOL build). If one ever appears: Magisk → Uninstall → Restore images → install OTA (don't restart) → Magisk → Install → Install to inactive slot.
+
