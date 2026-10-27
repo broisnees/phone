@@ -152,3 +152,7 @@ bash scripts/backup.sh                            # re-run incremental backup
 
 Note: `adb reboot ...` is blocked by this Mac's Claude hook; run it yourself with `!adb reboot bootloader`.
 
+## Still to do
+
+See **TODO (start here)** at the top. Done: banking option A (DenyList), AMOLED black theme.
+
