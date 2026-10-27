@@ -116,3 +116,8 @@ servicemanager: Could not find ...IRemotelyProvisionedComponent/default in the V
 
 2026-10-31: chose the **TrickyStore leaked-keybox route** (Tricky Addon → Keybox → Repo → TAKR 35 (TAKR 28 gave Basic only); security patch spoofed to 2026-10-05 in `/data/adb/tricky_store/security_patch.txt`). TrickyStore signs attestation in software with the keybox, so it works around the dead TEE key. It spoofs another device's identity and gets revoked by Google every few weeks; swapping `keybox.xml` back undoes it. Still avoided: KmInstallKeybox (one-time TEE provisioning, can't be undone).
 
+## Options from here
+
+- **A. Stay rooted + Magisk DenyList**: hide root from banking/wallet apps that only check for root on the phone (often local banks, eSewa, Khalti). Google Pay tap-to-pay, apps that check with Play Integrity, and Netflix HD will not work.
+- **B. Unroot + relock**: restores the original keystore → full integrity, Google Pay, Widevine L1. **Wipes the phone.** No root/theme.
+
