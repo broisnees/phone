@@ -167,3 +167,22 @@ adb shell su -c 'cmd overlay fabricate --target android --name amoled --file /da
 adb shell su -c 'rm /data/adb/service.d/amoled.sh'; adb shell su -c 'cmd overlay fabricate --help' # (re-fabricating with --file replaces it)
 ```
 
+## UI mods (2026-10-31)
+
+- Iconify skipped: its README lists Nothing OS as unsupported.
+- **Vector v2.2** (JingMatrix's LSPosed continuation) — Magisk module `zygisk_vector`, file `modules/Vector-v2.2-3080-Release.zip`.
+- **Nothing Tweaks v3.1** (`com.souleven.nothingos`, github.com/RevealedSoulEven/NothingTweaks) — `modules/NothingTweaks-v3.1-release.apk`. Enabled in Vector, scope: `system`, `com.android.systemui`, `com.nothing.launcher`, `com.android.settings`.
+
+```sh
+# Vector CLI (as root on the phone)
+/data/adb/lspd/cli modules ls
+/data/adb/lspd/cli modules disable com.souleven.nothingos
+/data/adb/lspd/cli scope ls com.souleven.nothingos
+```
+
+**Notification Style** (own build) — Magisk module `nees_notifstyle`: static RRO `com.nees.overlay.notifstyle` on SystemUI.
+Source `overlay-src/NotifStyle/res/values/dimens.xml` (stock → new): `notification_corner_radius` 16→28dp, `notification_corner_radius_small` 4→28dp, `notification_divider_height` 2→6dp.
+Rebuild: aapt2 compile/link against `android-35/android.jar` → zipalign → apksigner (key `overlay-src/build/key.jks`, pass `overlay`) → copy into `overlay-src/module/system/product/overlay/NotifStyle/` → zip → `magisk --install-module`. Shell-fabricated overlays can only change colours/ints, which is why sizes need a real APK.
+
+If System UI crash-loops: hold **Volume Down** during boot (Magisk safe mode, disables all modules for that boot).
+
