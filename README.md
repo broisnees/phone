@@ -156,3 +156,14 @@ Note: `adb reboot ...` is blocked by this Mac's Claude hook; run it yourself wit
 
 See **TODO (start here)** at the top. Done: banking option A (DenyList), AMOLED black theme.
 
+## AMOLED theme commands
+
+```sh
+adb shell su -c 'cmd overlay disable com.android.shell:amoled'   # turn off (back to grey)
+adb shell su -c 'cmd overlay enable --user 0 com.android.shell:amoled'   # turn on
+# change colours: edit theme/amoled.xml, push to /data/system/amoled.xml, then
+adb shell su -c 'cmd overlay fabricate --target android --name amoled --file /data/system/amoled.xml'
+# remove completely
+adb shell su -c 'rm /data/adb/service.d/amoled.sh'; adb shell su -c 'cmd overlay fabricate --help' # (re-fabricating with --file replaces it)
+```
+
