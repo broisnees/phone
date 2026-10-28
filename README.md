@@ -186,3 +186,27 @@ Rebuild: aapt2 compile/link against `android-35/android.jar` → zipalign → ap
 
 If System UI crash-loops: hold **Volume Down** during boot (Magisk safe mode, disables all modules for that boot).
 
+## Performance (2026-10-31)
+
+- Force-compiled (`speed`) Settings, Settings search, SystemUI, Nothing Launcher, Gboard — they were `status=verify` (uncompiled) after the wipe.
+- Ran `cmd package bg-dexopt-job` to compile every other app.
+- Animation scales already 0.5×. CPU governor left on stock `schedutil` (kernel "boost" tweaks cost battery/heat for little gain).
+- Removed for user 0 (reversible): Google TV, YouTube Music, Keep, Docs, Gemini, Meet, AR Core, Google Feedback, Digital Wellbeing.
+
+### Speed-ups (2026-10-31, later)
+- Screen locked at 120 Hz: `settings put system min_refresh_rate 120.0` (and peak 120).
+- Animation scale 0.3× (all three scales; user preference).
+- Disabled Nothing Smart Center: `pm disable-user --user 0 com.nothing.smartcenter` (undo: `pm enable com.nothing.smartcenter`).
+- Background-restricted Facebook, Instagram, Google Home (X un-restricted again + added to DenyList, 2026-10-31 — X login still blocked by Play Integrity; use x.com as a Chrome web app): `cmd appops set <pkg> RUN_ANY_IN_BACKGROUND ignore` + standby bucket `restricted` (undo: `... allow` and `am set-standby-bucket <pkg> active`).
+- Removed AFWall+ (and its Vector module entry).
+- Talk AOT-compiled: `cmd package compile -m speed -f com.nees.talk` (re-run after each Talk update).
+
+Restore a removed app: `adb shell cmd package install-existing <package>`
+e.g. `com.google.android.apps.tachyon` (Meet), `com.google.android.apps.bard` (Gemini).
+
+DenyList commands:
+```sh
+adb shell su -c 'magisk --denylist ls'          # list hidden apps
+adb shell su -c 'magisk --denylist add <pkg>'   # hide root from another app
+```
+
