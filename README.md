@@ -221,3 +221,35 @@ adb shell su -c 'magisk --denylist add <pkg>'   # hide root from another app
 - [Google: Android 13+ verdict changes](https://developer.android.com/google/play/integrity/improvements) · [Integrity verdicts](https://developer.android.com/google/play/integrity/verdicts)
 - [XDA: Unlock & root Nothing Phone 1](https://xda-developers.com/how-to-bootloader-unlock-root-magisk-nothing-phone-1/)
 
+## Haptics module (Haptix) — ENABLED (v3, 2026-10-31)
+
+`com.nees.haptix` (Xposed, runs under Vector). Source `haptics-module/app/src/main/java/com/nees/haptix/Hooks.java`, APK `haptics-module/app/build/outputs/apk/release/app-release.apk` (v3 built, **not yet installed** — the phone has v2 installed, disabled).
+
+Rules: state-change hooks only (no per-frame expansion/scroll/draw work), one effect per event, ≥120 ms between haptics (60 ms for volume key repeat, 80 ms for slider detents). Effects go through `View.performHapticFeedback` (or the hidden `Vibrator#performHapticFeedback` when no view), so they follow the system touch-haptic toggle and intensity.
+
+| Event | Effect | Hook |
+|---|---|---|
+| Shade reaches fully open / closes | CLOCK_TICK (selection) | SystemUI `ShadeExpansionStateManager.updateStateInternal(int)` |
+| Quick-settings tile tap | CLOCK_TICK | SystemUI `QSTileImpl.click(Expandable)` |
+| Notification swiped away | CONFIRM (success) | SystemUI `SwipeHelper.dismissChild(View,float,boolean)` (notification helpers only) |
+| Volume key step | CLOCK_TICK | SystemUI `VolumeDialogControllerImpl.onVolumeChangedW(int,int)` (FLAG_SHOW_UI only) |
+| Volume reaches max or min | CONFIRM once (not repeated while held) | same |
+| Volume panel slider detent | CLOCK_TICK, ≤1 per 80 ms | SystemUI `VolumeDialogControllerImpl.onSetStreamVolumeW(int,int)` |
+| Ringer mode change | VIRTUAL_KEY (impact) | SystemUI `VolumeDialogControllerImpl.onSetRingerModeW(int,boolean)` |
+| App icon tap / launch | VIRTUAL_KEY | Launcher `Launcher.startActivitySafely(View,Intent,ItemInfo)` |
+| Folder open | VIRTUAL_KEY | Launcher `Folder.animateOpen()` / `animateOpen(List,int)` |
+| Swipe-up commits to home (app minimize) | CONFIRM | Launcher `AbsSwipeUpHandler.animateToProgress(…, GestureEndTarget=HOME, …)` |
+| Swipe-up into recents | CLOCK_TICK | same, `GestureEndTarget=RECENTS` |
+| Recents card snap | CLOCK_TICK | Launcher `PagedView.onPageEndTransition()` on `RecentsView` only |
+| Back gesture | — (Nothing already vibrates in `BackPanelController`) | not hooked |
+
+Measured (v2, before the user asked to stop testing): SystemUI CPU over 4 shade open/close cycles was 53–59% of one core with the module disabled and 61–79% enabled (first run right after a SystemUI restart). v1 used a per-frame expansion hook and made SystemUI laggy; v2/v3 removed all per-frame hooks.
+
+### Test it yourself (when the phone is free)
+1. Install v3: `adb install -r haptics-module/app/build/outputs/apk/release/app-release.apk`
+2. Enable + scope (as root): `/data/adb/lspd/cli modules enable com.nees.haptix` and `/data/adb/lspd/cli scope set com.nees.haptix com.android.systemui/0 com.nothing.launcher/0`
+3. Restart the phone (hooks load at boot).
+4. Check the bind log: `grep Haptix $(ls -t /data/adb/lspd/log/modules_*.log | head -1)` — every hook should say `hooked …`, none `FAILED`.
+5. Try each row of the table above; the same log prints `fired <event>` for each haptic.
+6. If anything feels laggy or wrong: `/data/adb/lspd/cli modules disable com.nees.haptix` and restart the phone.
+
