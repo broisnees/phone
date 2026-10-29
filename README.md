@@ -210,3 +210,14 @@ adb shell su -c 'magisk --denylist ls'          # list hidden apps
 adb shell su -c 'magisk --denylist add <pkg>'   # hide root from another app
 ```
 
+## Sources
+
+- [XDA: Fix Widevine L1 unlocked bootloader (alternate keystore, no attestation key)](https://xdaforums.com/t/fix-widevine-l1-unlocked-bootloader.4731374/)
+- [GitHub: -10003 traced to km_read_attestation_key](https://github.com/openai/codex/issues/54137)
+- [TEESimulator #216: -10003 hard HAL status](https://github.com/JingMatrix/TEESimulator/issues/216) · [#293: all-UNEVALUATED with bad keybox](https://github.com/JingMatrix/TEESimulator/issues/293)
+- [XDA: Tricky Store thread](https://xdaforums.com/t/tricky-store-bootloader-keybox-spoofing.4683446/page-397)
+- [XDA: Nothing Phone 3a Pro integrity — relock restored it](https://xdaforums.com/t/nothing-phone-3a-pro-best-way-to-fix-play-integrity.4770068/)
+- [KOWX712/PlayIntegrityFix](https://github.com/KOWX712/PlayIntegrityFix) · [5ec1cff/TrickyStore](https://github.com/5ec1cff/TrickyStore)
+- [Google: Android 13+ verdict changes](https://developer.android.com/google/play/integrity/improvements) · [Integrity verdicts](https://developer.android.com/google/play/integrity/verdicts)
+- [XDA: Unlock & root Nothing Phone 1](https://xda-developers.com/how-to-bootloader-unlock-root-magisk-nothing-phone-1/)
+
