@@ -1,0 +1,6 @@
+id=nees_fullscreen
+name=Full-screen (no letterbox)
+version=v1
+versionCode=1
+author=nees
+description=Forces apps to fill the tall screen (force_resizable + per-app aspect override). Edit /data/adb/fullscreen/apps.txt and exclude.txt. Reversible: uninstall.
