@@ -6,7 +6,7 @@ Last updated: 2026-10-31
 
 Needs you (quick):
 - [ ] **Restart the phone** → applies the Inter system font (`nees_interfont`), activates the bootloop protector (YABP) and moves the charge-limit module into place
-- [ ] **Test Instagram DM reel** → open a reel from a DM; Unscroll v2 should close it instantly with no scrolling. If not: `grep Unscroll` in the newest `/data/adb/lspd/log/modules_*.log`, look for `seen <id>` lines, add them to `IG_FEEDS` in `unscroll/.../Hooks.java`
+- [ ] **Test Unscroll v3** → tap a suggested reel in Instagram and a Short in YouTube: it plays, like/comment/follow work, swiping to the next one does nothing. Check with `phone log Unscroll` in Termux (look for `locked pager <id>`); if swiping still works, send the `seen …` lines so the pager id can be added to `PAGERS`
 - [ ] **YouTube issue** you mentioned — open it and ask Claude to "look" (screen capture only)
 - [ ] **Test MaxQ** → any video → ⚙ → Quality shows the highest option, not Auto
 - [ ] **GCam** → gear → More settings → Configs → load `LMNothing_V2.0…agc` (alt: `Ghost_V2…agc`); files in `Download/AGC.9.1/configs/`
@@ -259,13 +259,25 @@ Vector/LSPosed module `com.nees.unscroll` (source `unscroll/`, APK `unscroll/app
 
 | App (version tested against) | Hidden / blocked |
 |---|---|
-| YouTube 21.41 | Shorts tab in the bottom bar (label "Shorts" under `pivot_bar`); Shorts shelves/chips in feeds (row collapsed, restored if the row is recycled); Shorts player (`reel_watch_fragment_root`, `reel_player_page_container`, `reel_watch_player`, `reel_watch_pager_view_pager`) → backs out; `youtube.com/shorts/ID` links → open in the normal player; "Shorts" launcher shortcut → normal launch |
-| Instagram 453 | Reels tab (`clips_tab`); Reels viewer (`clips_viewer_*`) → backs out; `/reel/ID` links → open as a post. Stories (`reel_viewer_*`) are untouched |
+| YouTube 21.41 | Shorts tab in the bottom bar (label "Shorts" under `pivot_bar`); Shorts shelves/chips in feeds (row collapsed, restored if the row is recycled); Shorts player (`reel_watch_fragment_root`, `reel_player_page_container`, `reel_watch_player`, `reel_watch_pager_view_pager`) → plays, but swiping to the next Short is locked; `youtube.com/shorts/ID` links → open in the normal player; "Shorts" launcher shortcut → normal launch |
+| Instagram 453 | Reels tab (`clips_tab`); Reels viewer (`clips_viewer_*`) → plays, but swiping to the next reel is locked; `/reel/ID` links → open as a post. Stories (`reel_viewer_*`) are untouched |
 | Facebook 584 | Bottom/top tab labelled "Reels…tab" or "Video…tab" (Litho, matched by label). Reels opened from the feed are not blocked yet (no stable signal) |
 
 Disable: `adb shell su -c '/data/adb/lspd/cli modules disable com.nees.unscroll'`, then force-stop the three apps. Log lines: grep `Unscroll` in the newest `/data/adb/lspd/log/modules_*.log`.
 
 **Unscroll v2 (2026-10-31):** Instagram reel viewers matched by any `clips_viewer*` id plus the `clips_homecoming_*` feed; inline `clips_carousel_viewpager` shelves hidden. Players now get their pagers' touch input disabled before closing; a reel opened on its own screen (e.g. from a DM) finishes that activity, otherwise back is pressed up to 3× until the player is gone. Unknown `clips_*` ids are logged once as `Unscroll: seen <id> in <Activity>` — check with `grep Unscroll` in the newest `/data/adb/lspd/log/modules_*.log` and add them to `IG_FEEDS`.
+
+**Unscroll v3 (2026-10-31):** no more backing out. A Short/Reel you tap stays open so you can watch, like, comment and follow; only its swipe-to-next pager is locked (drags swallowed, taps still reach the buttons). Locked: ids in `PAGERS` (`reel_watch_pager_view_pager`, `clips_viewer_view_pager`), any ViewPager inside a player, or a RecyclerView ≤ 3 levels below one (deeper lists like comments still scroll). Each lock logs `Unscroll: locked pager <id>`. Tabs stay hidden and Shorts links still open in the normal player.
+
+## Termux, SSH, Claude Code and the `phone` CLI (2026-10-31)
+
+- **Termux** 0.118.3 + **Termux:Boot** 0.8.1 (GitHub builds), battery-optimization exempt, root granted in Magisk (uid 10296, user `u0_a296`).
+- **SSH**: `sshd` on port **8022**, key-only (Mac `~/.ssh/id_ed25519.pub`), started at boot by `~/.termux/boot/start-sshd`.
+  - USB: `adb forward tcp:8022 tcp:8022 && ssh -p 8022 u0_a296@127.0.0.1`
+  - Wi-Fi: `ssh -p 8022 u0_a296@192.168.18.225` (needs macOS Settings → Privacy & Security → Local Network on for your terminal)
+- **Claude Code**: no Android build, so it runs in a Debian proot (`proot-distro`, Node 20). `claude` in Termux is a wrapper (`$PREFIX/bin/claude`) that enters Debian with Termux home bind-mounted and the current directory kept. First run: `claude` → log in. Update: `proot-distro login debian -- npm update -g @anthropic-ai/claude-code`.
+- **`phone` CLI** (source `cli/phone`, installed at `$PREFIX/bin/phone`): `phone status` (battery, charge limit, root, keybox, ssh, Magisk + LSPosed modules) · `phone charge 80 75` · `phone mods` / `phone mod on|off <id>` · `phone xposed` · `phone log Unscroll` · `phone restart <pkg>` · `phone keybox` / `phone keybox restore <file>` · `phone ssh start|stop` · `phone claude`. Reinstall after editing: `scp -P 8022 cli/phone u0_a296@127.0.0.1:/data/data/com.termux/files/usr/bin/phone`.
+- Gotchas: commands run as the Termux user through Magisk `su` need the app's groups (`-G 3003` inet) for network. The Vector CLI (`/data/adb/lspd/cli`) prints nothing when called via Termux's `su`, so `phone xposed` reads `/data/adb/lspd/config/modules_config.db` and toggling stays an `adb shell` command.
 
 ## MaxQ (YouTube max quality) — ENABLED
 

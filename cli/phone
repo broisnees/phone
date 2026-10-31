@@ -1,0 +1,147 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# phone — one command for this rooted Nothing Phone (1), run from Termux (locally or over SSH).
+# Install: cp phone $PREFIX/bin/ && chmod 755 $PREFIX/bin/phone
+set -euo pipefail
+
+LSPD=/data/adb/lspd/cli
+LSPD_DB=/data/adb/lspd/config/modules_config.db
+CHARGE_CONF=/data/adb/chargelimit.conf
+TS=/data/adb/tricky_store
+
+root() { su -c "$*"; }
+# The Vector CLI prints nothing when called through Termux's su (it only answers adb shell),
+# so the module list is read from Vector's database instead (read-only).
+lspd_ls() {
+  command -v sqlite3 >/dev/null || die "needs sqlite: pkg install sqlite"
+  root "$(command -v sqlite3) -readonly -separator ' ' $LSPD_DB \"select module_pkg_name, case enabled when 1 then 'on' else 'off' end from modules where module_pkg_name != 'lspd'\"" |
+    awk '{printf "%-32s %s\n", $1, $2}'
+}
+die() { echo "phone: $*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+usage: phone <command> [args]
+
+  status                     battery, root, modules, integrity, ssh at a glance
+  charge                     show charge limit
+  charge <pause> <resume>    set limit, e.g. `phone charge 80 75`
+  mods                       list Magisk modules
+  mod on|off <id>            enable/disable a Magisk module (applies after reboot)
+  xposed                     list LSPosed (Vector) modules
+  xposed on|off <pkg>        print the adb command to toggle an LSPosed module
+  log [filter] [n]           last n (default 30) LSPosed module log lines, e.g. `phone log Unscroll`
+  restart <pkg>              force-stop an app so hooks reload (e.g. com.instagram.android)
+  keybox                     show the TrickyStore keybox and spoofed security patch
+  keybox restore <file>      install a keybox.xml (old one kept as keybox.xml.bak)
+  ssh [start|stop]           sshd status / start / stop (port 8022)
+  claude [args]              run Claude Code (Debian proot)
+EOF
+}
+
+battery() {
+  local cap status
+  cap=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null || root cat /sys/class/power_supply/battery/capacity)
+  status=$(cat /sys/class/power_supply/battery/status 2>/dev/null || root cat /sys/class/power_supply/battery/status)
+  echo "battery    ${cap}% ($status)"
+}
+
+charge() {
+  if [ $# -eq 0 ]; then
+    root cat "$CHARGE_CONF"
+    return
+  fi
+  [ $# -eq 2 ] || die "usage: phone charge <pause> <resume>"
+  [[ $1 =~ ^[0-9]+$ && $2 =~ ^[0-9]+$ ]] || die "limits must be numbers"
+  (( $2 < $1 && $1 <= 100 )) || die "need resume < pause <= 100"
+  root "printf 'PAUSE=$1\nRESUME=$2\n' > $CHARGE_CONF"
+  echo "charge limit: pause at $1%, resume at $2% (applies within a minute)"
+}
+
+mods() {
+  root 'for d in /data/adb/modules/*/; do
+    id=$(basename "$d"); s=on
+    [ -f "$d/disable" ] && s=off; [ -f "$d/remove" ] && s=removing
+    printf "%-32s %s\n" "$id" "$s"
+  done'
+}
+
+mod() {
+  [ $# -eq 2 ] || die "usage: phone mod on|off <id>"
+  local dir=/data/adb/modules/$2
+  root "test -d $dir" || die "no module $2"
+  case $1 in
+    on)  root "rm -f $dir/disable" ;;
+    off) root "touch $dir/disable" ;;
+    *)   die "usage: phone mod on|off <id>" ;;
+  esac
+  echo "$2 → $1 (reboot to apply)"
+}
+
+xposed() {
+  if [ $# -eq 0 ]; then lspd_ls; return; fi
+  [ $# -eq 2 ] && [[ $1 == on || $1 == off ]] || die "usage: phone xposed on|off <pkg>"
+  local verb=enable; [ "$1" = off ] && verb=disable
+  # See lspd_ls: toggling has to go through adb shell (or the Vector manager app).
+  echo "from your Mac: adb shell su -c '$LSPD modules $verb $2'"
+  echo "then restart the hooked apps (phone restart <pkg>)"
+}
+
+log() {
+  local filter=${1:-.} n=${2:-30}
+  root "f=\$(ls -t /data/adb/lspd/log/modules_*.log | head -1); grep -E '$filter' \"\$f\" | tail -n $n"
+}
+
+keybox() {
+  if [ $# -eq 0 ]; then
+    root "grep -o 'DeviceID=\"[^\"]*\"' $TS/keybox.xml | head -1; cat $TS/security_patch.txt 2>/dev/null; cat $TS/tee_status 2>/dev/null; echo"
+    return
+  fi
+  [ "$1" = restore ] && [ $# -eq 2 ] || die "usage: phone keybox restore <file>"
+  [ -f "$2" ] || die "no file $2"
+  grep -q '<AndroidAttestation>' "$2" || die "$2 is not a keybox.xml"
+  root "cp $TS/keybox.xml $TS/keybox.xml.bak && cp '$(realpath "$2")' $TS/keybox.xml && chmod 644 $TS/keybox.xml"
+  echo "keybox installed; previous one is $TS/keybox.xml.bak"
+}
+
+sshd_cmd() {
+  case ${1:-status} in
+    start)  pgrep -x sshd >/dev/null || sshd; echo "sshd running on port 8022" ;;
+    stop)   pkill -x sshd && echo "sshd stopped" || echo "sshd was not running" ;;
+    status)
+      if pgrep -x sshd >/dev/null; then
+        local ip
+        ip=$(root 'ip -4 addr show wlan0' 2>/dev/null | awk '/inet /{sub("/.*","",$2); print $2}' || true)
+        echo "ssh        on — ssh -p 8022 $(whoami)@${ip:-<phone-ip>}"
+      else
+        echo "ssh        off (phone ssh start)"
+      fi ;;
+    *) die "usage: phone ssh [start|stop]" ;;
+  esac
+}
+
+status() {
+  battery
+  echo "limit      $(root cat $CHARGE_CONF | tr '\n' ' ')"
+  echo "root       $(root 'magisk -v' 2>/dev/null || echo 'not granted')"
+  echo "integrity  $(root "grep -o 'DeviceID=\"[^\"]*\"' $TS/keybox.xml | head -1")"
+  sshd_cmd status
+  echo; echo "Magisk modules:"; mods
+  echo; echo "LSPosed modules:"; lspd_ls
+}
+
+cmd=${1:-help}
+shift || true
+case $cmd in
+  status)        status ;;
+  charge)        charge "$@" ;;
+  mods)          mods ;;
+  mod)           mod "$@" ;;
+  xposed|lsp)    xposed "$@" ;;
+  log)           log "$@" ;;
+  restart)       [ $# -eq 1 ] || die "usage: phone restart <pkg>"; root "am force-stop $1" && echo "stopped $1" ;;
+  keybox)        keybox "$@" ;;
+  ssh)           sshd_cmd "$@" ;;
+  claude)        exec claude "$@" ;;
+  help|-h|--help) usage ;;
+  *)             usage; exit 1 ;;
+esac
