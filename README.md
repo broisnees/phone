@@ -281,3 +281,24 @@ LSPosed/Vector module `com.nees.maxq` (source `maxq/app/src/main/java/com/nees/m
 - Disable: `adb shell su -c '/data/adb/lspd/cli modules disable com.nees.maxq'` then `am force-stop com.google.android.youtube`.
 - After a YouTube update: nothing to do if the log still says `ready`; it rescans automatically. If it logs `quality setter not found` / `setQuality … not found`, YouTube changed the code shape — re-check the Morphe fingerprints (`patches/youtube/video/information/Fingerprints.kt`).
 
+## Glyph Tweaks (com.nees.glyph) — 2026-10-31
+
+Root-powered Glyph app. Source `glyph-app/`, APK `install/GlyphTweaks.apk`.
+
+**LED interface:** aw210xx driver, `/sys/class/leds/aw210xx_led/single_led_br` ← `"<hw> <0-4095>"`, written through one persistent `su` shell (only changed LEDs are written). Zone → hw LED (from `drivers/leds/leds_aw210xx.c` `frame_leds_effect`): A camera 7 · B diagonal 1 · C1–C4 ring 2–5 · E dot 16 · D1–D8 strip (bottom→top) 13, 11, 9, 12, 10, 14, 15, 8. Read-back: `cat .../reg` (2 bytes per LED from 0x21).
+
+**Features** (all toggles on the Home screen; service runs only while one is on, 0 % CPU idle):
+- Notifications: pattern per app (or default / off) via NotificationListener; "alert once" updates don't re-flash
+- Calls: looping pattern per contact while ringing (PHONE_STATE broadcast + contact lookup key)
+- Volume & brightness indicators: level on the strip for 1.5 s, 300 ms fade (**on by default**)
+- Charging meter: battery % on plug-in and on each % while charging; next segment breathes, dot lit
+- Music visualizer: Visualizer on session 0 only while music plays; bass → strip + ring beat, mids → diagonal, highs → camera; sensitivity slider
+- Ambient glow: ring breathes with unread notifications while the screen is off; Face-down mode: full brightness + ambient ring when face down (accelerometer only while enabled)
+- Glyph light (all zones, own brightness), countdown timer (strip drains, flashes at end), battery-on-demand — plus Quick Settings tiles "Glyph light", "Glyph battery", "Glyph timer"
+- Patterns: 8 presets + editor (step timeline, tap zones on the diagram, per-step brightness/duration, preview)
+
+**Permissions granted via adb:** POST_NOTIFICATIONS, RECORD_AUDIO (+ appop allow for background capture), READ_CONTACTS, READ_PHONE_STATE, READ_CALL_LOG, notification-listener access, Magisk root (uid policy).
+
+**Disable:** turn features off in the app (service stops), or `adb shell am force-stop com.nees.glyph`; uninstall: `adb uninstall com.nees.glyph`. If LEDs are ever left lit: `adb shell su -c 'echo 0 > /sys/class/leds/aw210xx_led/all_white_leds_br'`.
+
+**Verified:** service starts in foreground; volume up/down lit strip D1–D3 at 70 % (reg read-back) and faded to 0; all 15 zones distinct; no crashes. **Not verified on device:** brightness indicator, visualizer, calls, notifications, meters, tiles (need real use). Our frames override Nothing's own Glyph while an effect is active; when idle we leave the LEDs alone.
