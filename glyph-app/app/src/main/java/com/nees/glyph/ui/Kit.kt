@@ -79,7 +79,7 @@ import kotlin.math.roundToInt
 
 // ============================================================ Tokens
 
-/** Black canvas, soft charcoal cards, one warm accent. */
+/** Black canvas, soft charcoal cards, Nothing red as the one accent. */
 object C {
     val bg = Color(0xFF000000)
     val card = Color(0xFF121214)
@@ -89,9 +89,9 @@ object C {
     val text = Color(0xFFF4F4F6)
     val text2 = Color(0xFF9C9CA3)
     val text3 = Color(0xFF5E5E66)
-    val accent = Color(0xFFFFB547)
-    val accentSoft = Color(0x29FFB547)
-    val onAccent = Color(0xFF1C1300)
+    val accent = Color(0xFFE8302A)
+    val accentSoft = Color(0x33E8302A)
+    val onAccent = Color(0xFFFFFFFF)
     val green = Color(0xFF34C759)
     val red = Color(0xFFFF5A4E)
     val redSoft = Color(0x29FF5A4E)

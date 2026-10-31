@@ -21,6 +21,19 @@ enum class Zone(val label: String, val hw: Int) {
         /** Bottom → top. */
         val strip = listOf(D1, D2, D3, D4, D5, D6, D7, D8)
         const val COUNT = 15
+
+        /**
+         * Distance of each light along the phone's back, bottom to top: dot → strip → lower ring →
+         * upper ring → diagonal → camera. Waves and sweeps travel along this path.
+         */
+        val path: FloatArray = FloatArray(COUNT).also { d ->
+            d[E.ordinal] = 0f
+            strip.forEachIndexed { i, z -> d[z.ordinal] = 1f + i }
+            d[C2.ordinal] = 9.5f; d[C3.ordinal] = 9.5f
+            d[C1.ordinal] = 11f; d[C4.ordinal] = 11f
+            d[B.ordinal] = 12.5f; d[A.ordinal] = 13f
+        }
+        const val PATH_END = 13f
     }
 }
 

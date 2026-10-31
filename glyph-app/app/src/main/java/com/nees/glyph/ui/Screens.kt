@@ -1,5 +1,29 @@
 package com.nees.glyph.ui
 
+import com.nees.glyph.PressEffect
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import kotlin.math.roundToInt
+import androidx.compose.material.icons.rounded.FlashOn
+import com.nees.glyph.LevelStyle
+import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.runtime.mutableLongStateOf
+import com.nees.glyph.Buzz
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Downloading
+import androidx.compose.material.icons.rounded.LinearScale
+import androidx.compose.material.icons.rounded.LockOpen
+import com.nees.glyph.VizStyle
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Contacts
+import androidx.compose.material.icons.rounded.DoNotDisturbOn
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.PowerSettingsNew
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
@@ -131,6 +155,78 @@ fun LevelSlider(label: String, value: Int, range: IntRange = 0..100, suffix: Str
     }
 }
 
+/**
+ * A large pill you drag anywhere on: the fill follows the finger, the value sits inside it, a
+ * selection tick fires at every 10 %, [onPreview] runs live and [onCommit] once on release.
+ */
+@Composable
+fun PillSlider(label: String, value: Int, range: IntRange = 0..100, onPreview: (Int) -> Unit = {}, onCommit: (Int) -> Unit) {
+    val haptic = rememberHaptics()
+    var current by remember { mutableIntStateOf(value) }
+    var dragging by remember { mutableStateOf(false) }
+    // Follow outside changes only while the finger is up, so a save can't yank the thumb mid-drag.
+    LaunchedEffect(value) { if (!dragging) current = value }
+    var width by remember { mutableIntStateOf(1) }
+    fun at(x: Float) = (range.first + (x / width).coerceIn(0f, 1f) * (range.last - range.first)).roundToInt()
+    fun update(v: Int) {
+        if (v == current) return
+        if (v / 10 != current / 10) haptic(Haptic.SELECT)
+        current = v
+        onPreview(v)
+    }
+    Column(Modifier.fillMaxWidth().padding(S.pad)) {
+        Row {
+            Text(label, style = T.body, color = C.text, modifier = Modifier.weight(1f))
+            Text("$current%", style = T.body.tabular(), color = C.text2)
+        }
+        Spacer(Modifier.height(S.m))
+        val fraction = (current - range.first).toFloat() / (range.last - range.first).coerceAtLeast(1)
+        Box(
+            Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(24.dp)).background(C.raised)
+                .onSizeChanged { width = it.width.coerceAtLeast(1) }
+                .pointerInput(range) {
+                    awaitEachGesture {
+                        // Jump to the finger on touch-down, then follow every move until lift.
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        dragging = true
+                        down.consume()
+                        update(at(down.position.x))
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            change.consume() // keep the page from scrolling while adjusting
+                            update(at(change.position.x))
+                        }
+                        dragging = false
+                        onCommit(current)
+                    }
+                },
+        ) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(fraction.coerceIn(0.08f, 1f)).clip(RoundedCornerShape(24.dp)).background(C.accent))
+            Icon(Icons.Rounded.LightMode, null, tint = if (fraction > 0.12f) C.onAccent else C.text2, modifier = Modifier.align(Alignment.CenterStart).padding(start = S.l).size(20.dp))
+        }
+    }
+}
+
+/**
+ * Chips choosing where a level is drawn (picking one previews it at 60 %), led by a "Blink" chip
+ * that switches the diagonal's blink-on-every-press on or off.
+ */
+@Composable
+fun StylePicker(current: LevelStyle, effect: PressEffect, onEffect: (PressEffect) -> Unit, onPick: (LevelStyle) -> Unit) {
+    Column(Modifier.padding(start = S.pad + S.avatar + S.m, bottom = S.m)) {
+        Text("SHOW LEVEL ON", style = T.label, color = C.text3, modifier = Modifier.padding(bottom = S.s))
+        LazyRow(contentPadding = PaddingValues(end = S.pad), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+            items(LevelStyle.entries) { st -> Chip(st.label, current == st) { onPick(st) } }
+        }
+        Text("⚡ EFFECT ON EACH PRESS", style = T.label, color = C.text3, modifier = Modifier.padding(top = S.m, bottom = S.s))
+        LazyRow(contentPadding = PaddingValues(end = S.pad), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+            items(PressEffect.entries) { fx -> Chip(fx.label, effect == fx) { onEffect(fx) } }
+        }
+    }
+}
+
 /** Card row: icon tile, title + subtitle, then a switch and/or chevron. */
 @Composable
 fun FeatureRow(
@@ -186,38 +282,74 @@ fun HomeScreen(settings: Settings, open: (Screen) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = S.xxl)) {
         item {
             Header("Glyph") { CircleAction(Icons.Rounded.Tune, "Patterns", tint = C.accent) { open(Screen.Patterns) } }
+            // Hero: the phone back, large enough to hit each light, with whole-set controls under it.
             Card {
-                Row(Modifier.padding(S.pad), verticalAlignment = Alignment.CenterVertically) {
-                    GlyphDiagram(preview, Modifier.width(112.dp)) { z ->
+                Column(Modifier.fillMaxWidth().padding(vertical = S.xl), horizontalAlignment = Alignment.CenterHorizontally) {
+                    GlyphDiagram(preview, Modifier.height(300.dp)) { z ->
                         preview = Engine.frame(z to 100)
                         Engine.flash(Layer.Indicator, Engine.frame(z to 100), 600)
                         tick++
                     }
-                    Spacer(Modifier.width(S.l))
-                    Column {
-                        Text("15 zones", style = T.title, color = C.text)
-                        Spacer(Modifier.height(S.xs))
-                        Text("Tap a zone to light it on the back of your phone.", style = T.sub, color = C.text2)
+                    Spacer(Modifier.height(S.l))
+                    Text("Tap a light to test it", style = T.sub, color = C.text2)
+                    Spacer(Modifier.height(S.m))
+                    Row(horizontalArrangement = Arrangement.spacedBy(S.s)) {
+                        Chip("All on", selected = false) {
+                            val all = IntArray(Zone.COUNT) { 100 }
+                            preview = all; Engine.flash(Layer.Indicator, all, 1500); tick++
+                        }
+                        Chip("All off", selected = false) {
+                            preview = IntArray(Zone.COUNT); Engine.clear(Layer.Indicator)
+                        }
                     }
                 }
             }
             Spacer(Modifier.height(S.s))
-            Card { LevelSlider("Glyph brightness", settings.brightness) { change { settings.brightness = it; Engine.ceiling = it } } }
+            Card {
+                PillSlider(
+                    "Effect brightness", settings.brightness, range = 1..100,
+                    // Live: every glyph lights at the dragged level so you see exactly what you pick.
+                    onPreview = { v ->
+                        Engine.ceiling = v
+                        val all = IntArray(Zone.COUNT) { 100 }
+                        preview = all
+                        Engine.flash(Layer.Indicator, all, 900)
+                    },
+                    onCommit = { v -> change { settings.brightness = v; Engine.ceiling = v }; tick++ },
+                )
+            }
+        }
+        item {
+            SectionLabel("Control")
+            Card {
+                FeatureRow(
+                    Icons.Rounded.PowerSettingsNew, "Glyph effects",
+                    if (settings.paused) "Paused — only the Glyph light works" else "On",
+                    !settings.paused, { v -> change { settings.paused = !v } },
+                )
+                Hairline(); FeatureRow(
+                    Icons.Rounded.DoNotDisturbOn, "Respect Do Not Disturb",
+                    "Notifications, calls and ambient stay dark during DND",
+                    settings.respectDnd, { v -> change { settings.respectDnd = v } },
+                )
+            }
         }
         item {
             SectionLabel("Light up for")
             Card {
                 FeatureRow(Icons.Rounded.Notifications, "Notifications", "Pattern per app", settings.notifications, { v -> change { settings.notifications = v } })
-                Hairline(); FeatureRow(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Choose app patterns", "${settings.appsWithPatterns().size} apps customised", onOpen = { open(Screen.Apps) })
+                Hairline(); FeatureRow(Icons.Rounded.Apps, "Choose app patterns", "${settings.appsWithPatterns().size} apps customised", onOpen = { open(Screen.Apps) })
                 Hairline(); FeatureRow(Icons.Rounded.Call, "Calls", "Pattern per contact while ringing", settings.calls, { v -> change { settings.calls = v } })
-                Hairline(); FeatureRow(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Choose contact patterns", "Default: ${settings.pattern(settings.defaultCallPattern)?.name ?: "—"}", onOpen = { open(Screen.Contacts) })
+                Hairline(); FeatureRow(Icons.Rounded.Contacts, "Choose contact patterns", "Default: ${settings.pattern(settings.defaultCallPattern)?.name ?: "—"}", onOpen = { open(Screen.Contacts) })
             }
         }
         item {
             SectionLabel("Indicators")
             Card {
-                FeatureRow(Icons.Rounded.VolumeUp, "Volume level", "Shows on the strip when you press volume", settings.volumeIndicator, { v -> change { settings.volumeIndicator = v } })
-                Hairline(); FeatureRow(Icons.Rounded.BrightnessMedium, "Brightness level", "Shows on the strip when brightness changes", settings.brightnessIndicator, { v -> change { settings.brightnessIndicator = v } })
+                FeatureRow(Icons.Rounded.VolumeUp, "Volume level", "Shows on the glyphs when you press volume", settings.volumeIndicator, { v -> change { settings.volumeIndicator = v } })
+                if (settings.volumeIndicator) StylePicker(settings.volumeStyle, settings.volumeEffect, { fx -> settings.volumeEffect = fx; Engine.flashWithEffect(Layer.Indicator, Engine.level(0.6f, settings.volumeStyle), 1200, fx, true) }) { st -> settings.volumeStyle = st; Engine.flash(Layer.Indicator, Engine.level(0.6f, st), 1200) }
+                Hairline(); FeatureRow(Icons.Rounded.BrightnessMedium, "Brightness level", "Shows on the glyphs when brightness changes", settings.brightnessIndicator, { v -> change { settings.brightnessIndicator = v } })
+                if (settings.brightnessIndicator) StylePicker(settings.brightnessStyle, settings.brightnessEffect, { fx -> settings.brightnessEffect = fx; Engine.flashWithEffect(Layer.Indicator, Engine.level(0.6f, settings.brightnessStyle), 1200, fx, true) }) { st -> settings.brightnessStyle = st; Engine.flash(Layer.Indicator, Engine.level(0.6f, st), 1200) }
                 Hairline(); FeatureRow(Icons.Rounded.BatteryChargingFull, "Charging meter", "Battery level on plug-in and as it fills", settings.chargingMeter, { v -> change { settings.chargingMeter = v } })
             }
         }
@@ -225,9 +357,28 @@ fun HomeScreen(settings: Settings, open: (Screen) -> Unit) {
             SectionLabel("Effects")
             Card {
                 FeatureRow(Icons.Rounded.GraphicEq, "Music visualizer", "Glyphs move with whatever is playing", settings.visualizer, { v -> change { settings.visualizer = v } })
-                Hairline(); FeatureRow(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Visualizer settings", "Sensitivity ${settings.vizGain}%", onOpen = { open(Screen.Visualizer) })
+                Hairline(); FeatureRow(Icons.Rounded.Tune, "Visualizer style", "${settings.vizStyle.label} · sensitivity ${settings.vizGain}%", onOpen = { open(Screen.Visualizer) })
                 Hairline(); FeatureRow(Icons.Rounded.Nightlight, "Ambient glow", "Ring breathes while you have unread notifications", settings.ambient, { v -> change { settings.ambient = v } })
                 Hairline(); FeatureRow(Icons.Rounded.ScreenRotation, "Face-down mode", "Full brightness and ambient ring when face down", settings.faceDown, { v -> change { settings.faceDown = v } })
+            }
+        }
+        item {
+            SectionLabel("Live")
+            Card {
+                FeatureRow(Icons.Rounded.LockOpen, "Unlock animation", "A sweep of light runs up the back when you unlock", settings.unlockAnim, { v -> change { settings.unlockAnim = v } })
+                Hairline(); FeatureRow(Icons.Rounded.Downloading, "Busy dot", "Bottom dot shows background activity", settings.busyDot, { v -> change { settings.busyDot = v } })
+                if (settings.busyDot) {
+                    LazyRow(
+                        contentPadding = PaddingValues(start = S.pad + S.avatar + S.m, end = S.pad, bottom = S.m),
+                        horizontalArrangement = Arrangement.spacedBy(S.s),
+                    ) {
+                        item { Chip("Downloads", settings.busyDownloads) { change { settings.busyDownloads = !settings.busyDownloads } } }
+                        item { Chip("Background tasks", settings.busyOngoing) { change { settings.busyOngoing = !settings.busyOngoing } } }
+                        item { Chip("Mic in use", settings.busyMic) { change { settings.busyMic = !settings.busyMic } } }
+                        item { Chip("Camera in use", settings.busyCamera) { change { settings.busyCamera = !settings.busyCamera } } }
+                    }
+                }
+                Hairline(); FeatureRow(Icons.Rounded.LinearScale, "Live progress", "Any app's progress bar shows on the strip", settings.liveProgress, { v -> change { settings.liveProgress = v } })
             }
         }
         item {
@@ -401,17 +552,32 @@ fun VisualizerScreen(settings: Settings, back: () -> Unit) {
                 FeatureRow(Icons.Rounded.GraphicEq, "Visualizer", "Runs only while music is playing", settings.visualizer, { settings.visualizer = it; GlyphService.sync(ctx) })
                 Hairline(start = S.pad)
                 LevelSlider("Sensitivity", settings.vizGain) { settings.vizGain = it }
+                Hairline(start = S.pad)
+                FeatureRow(Icons.Rounded.Vibration, "Feel the beat", "A soft tick on each kick drum", settings.vizHaptics, { settings.vizHaptics = it; GlyphService.sync(ctx) })
             }
-            SectionLabel("How it maps")
+            SectionLabel("Style")
             Card {
-                listOf("Bass" to "Bottom strip level, ring pulses on the beat", "Mids" to "Diagonal glyph", "Highs" to "Camera glyph").forEachIndexed { i, (a, b) ->
-                    Row(Modifier.fillMaxWidth().padding(horizontal = S.pad, vertical = S.m)) {
-                        Text(a, style = T.headline, color = C.text, modifier = Modifier.width(72.dp))
-                        Text(b, style = T.sub, color = C.text2)
+                VizStyle.entries.forEachIndexed { i, st ->
+                    val on = settings.vizStyle == st
+                    Row(
+                        Modifier.fillMaxWidth().rowPress { settings.vizStyle = st; GlyphService.sync(ctx) }
+                            .padding(horizontal = S.pad, vertical = S.m),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(st.label, style = T.headline, color = if (on) C.accent else C.text)
+                            Text(st.blurb, style = T.sub, color = C.text2)
+                        }
+                        if (on) Icon(Icons.Rounded.CheckCircle, "Selected", tint = C.accent, modifier = Modifier.size(22.dp))
                     }
-                    if (i < 2) Hairline(start = S.pad)
+                    if (i < VizStyle.entries.lastIndex) Hairline(start = S.pad)
                 }
             }
+            Spacer(Modifier.height(S.s))
+            Text(
+                "Uses all 15 lights. Plays only while music is playing and the screen is on.",
+                style = T.caption, color = C.text3, modifier = Modifier.padding(horizontal = S.edge + S.pad),
+            )
         }
     }
 }
@@ -511,6 +677,9 @@ fun EditorScreen(settings: Settings, initial: Pattern, close: () -> Unit) {
     val steps = remember { mutableStateListOf(*initial.steps.toTypedArray()) }
     var selected by remember { mutableIntStateOf(0) }
     val isCustom = settings.customPatterns().any { it.id == initial.id }
+    // Record mode: each zone tap becomes a step; its length is the time until the next tap.
+    var recording by remember { mutableStateOf(false) }
+    var lastTapAt by remember { mutableLongStateOf(0L) }
     fun current() = Pattern(initial.id, name.ifBlank { "Pattern" }, steps.toList())
 
     Column(Modifier.fillMaxSize().navigationBarsPadding()) {
@@ -550,16 +719,35 @@ fun EditorScreen(settings: Settings, initial: Pattern, close: () -> Unit) {
             var level by remember(selected) { mutableFloatStateOf(step.levels.maxOrNull()?.takeIf { it > 0 }?.toFloat() ?: 100f) }
             Card(Modifier.weight(1f)) {
                 Row(Modifier.padding(S.pad), verticalAlignment = Alignment.CenterVertically) {
-                    GlyphDiagram(step.levels, Modifier.width(120.dp)) { z ->
-                        val l = step.levels.copyOf()
-                        l[z.ordinal] = if (l[z.ordinal] > 0) 0 else level.toInt()
-                        steps[selected] = step.copy(levels = l)
-                        Engine.flash(Layer.Indicator, l, 500)
+                    GlyphDiagram(if (recording) IntArray(Zone.COUNT) else step.levels, Modifier.width(120.dp)) { z ->
+                        if (recording) {
+                            val now = android.os.SystemClock.uptimeMillis()
+                            if (lastTapAt == 0L) steps.clear()
+                            else if (steps.isNotEmpty()) steps[steps.lastIndex] = steps.last().copy(ms = (now - lastTapAt).toInt().coerceIn(40, 1500))
+                            steps.add(Step.of(250, z to level.toInt()).vibe(Buzz.TICK))
+                            lastTapAt = now
+                            selected = steps.lastIndex
+                            Engine.flash(Layer.Indicator, Engine.frame(z to 100), 300)
+                            Buzz.fire(Buzz.TICK, android.os.VibrationAttributes.USAGE_TOUCH)
+                        } else {
+                            val l = step.levels.copyOf()
+                            l[z.ordinal] = if (l[z.ordinal] > 0) 0 else level.toInt()
+                            steps[selected] = step.copy(levels = l)
+                            Engine.flash(Layer.Indicator, l, 500)
+                        }
                     }
                     Spacer(Modifier.width(S.l))
                     Column(Modifier.weight(1f)) {
-                        Text("Step ${selected + 1}", style = T.headline, color = C.text)
-                        Text("Tap zones to switch them on or off.", style = T.sub, color = C.text2)
+                        Text(if (recording) "Recording" else "Step ${selected + 1}", style = T.headline, color = if (recording) C.accent else C.text)
+                        Text(
+                            if (recording) "Tap lights in rhythm. Each tap is a step; the gap sets its length." else "Tap zones to switch them on or off.",
+                            style = T.sub, color = C.text2,
+                        )
+                        Spacer(Modifier.height(S.s))
+                        Chip(if (recording) "Stop recording" else "Record taps", recording) {
+                            recording = !recording
+                            lastTapAt = 0L
+                        }
                         Spacer(Modifier.height(S.m))
                         Row(horizontalArrangement = Arrangement.spacedBy(S.s)) {
                             Chip("All", false) { steps[selected] = Step.all(step.ms, level.toInt()) }
@@ -568,6 +756,15 @@ fun EditorScreen(settings: Settings, initial: Pattern, close: () -> Unit) {
                         if (steps.size > 1) {
                             Spacer(Modifier.height(S.s))
                             Chip("Delete step", false) { steps.removeAt(selected); selected = (selected - 1).coerceAtLeast(0) }
+                        }
+                    }
+                }
+                Text("Vibration", style = T.body, color = C.text, modifier = Modifier.padding(start = S.pad, top = S.s))
+                Row(Modifier.padding(horizontal = S.pad, vertical = S.s), horizontalArrangement = Arrangement.spacedBy(S.s)) {
+                    Buzz.labels.forEachIndexed { b, label ->
+                        Chip(label, step.buzz == b) {
+                            steps[selected] = step.vibe(b)
+                            Buzz.fire(b, android.os.VibrationAttributes.USAGE_TOUCH)
                         }
                     }
                 }

@@ -5,6 +5,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -39,12 +44,14 @@ class MainActivity : ComponentActivity() {
         val missing = PERMISSIONS.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), 1)
         val settings = Settings(this)
+        Buzz.init(this)
         GlyphService.sync(this)
         setContent {
             TalkTheme {
                 var screen by rememberSaveable { mutableStateOf(Screen.Home) }
                 val back = { screen = Screen.Home }
                 BackHandler(screen != Screen.Home) { back() }
+                Box(Modifier.fillMaxSize()) {
                 AnimatedContent(
                     screen,
                     transitionSpec = {
@@ -62,6 +69,9 @@ class MainActivity : ComponentActivity() {
                         Screen.Light -> LightScreen(settings, back)
                         Screen.Patterns -> PatternsScreen(settings, back)
                     }
+                }
+                // Solid strip behind the status bar so scrolled content never runs under the clock.
+                Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
                 }
             }
         }

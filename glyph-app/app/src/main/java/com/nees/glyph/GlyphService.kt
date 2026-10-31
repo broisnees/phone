@@ -47,13 +47,20 @@ class GlyphService : Service() {
         super.onCreate()
         instance = this
         settings = Settings(this)
+        Buzz.init(this)
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        // The notification listener keeps this process alive, so the "running" notification can go.
+        if (NotifListener.connected) dropForeground()
         settings.listen(prefListener)
         registerReceiver(screenReceiver, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF) })
         apply()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Every startForegroundService() call must be answered with startForeground(), even when
+        // the service already exists; then the notification is dropped again if the listener keeps us alive.
+        startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        if (NotifListener.connected) dropForeground()
         when (intent?.action) {
             ACTION_TORCH -> setTorch(!Engine.isActive(Layer.Torch))
             ACTION_BATTERY -> showBattery(3000)
@@ -80,6 +87,13 @@ class GlyphService : Service() {
     fun apply() {
         Engine.ceiling = if (faceDown) 100 else settings.brightness
         Engine.torchLevel = settings.torchLevel
+        Engine.paused = settings.paused
+        vizEngine.sensitivity = settings.vizGain
+        vizEngine.style = settings.vizStyle
+        vizEngine.onKick = if (settings.vizHaptics) ({ Buzz.fire(Buzz.TICK, android.os.VibrationAttributes.USAGE_MEDIA, minGapMs = 150) }) else null
+        toggle("unlock", settings.unlockAnim, { registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT)) }, { runCatching { unregisterReceiver(unlockReceiver) } })
+        toggle("busy", settings.busyDot, ::privacyOn, ::privacyOff)
+        updateBusy()
         toggle("vol", settings.volumeIndicator, ::volumeOn, ::volumeOff)
         toggle("bright", settings.brightnessIndicator, ::brightnessOn, ::brightnessOff)
         toggle("calls", settings.calls, ::callsOn, ::callsOff)
@@ -97,7 +111,7 @@ class GlyphService : Service() {
     }
 
     private fun disableAll() {
-        volumeOff(); brightnessOff(); callsOff(); chargeOff(); vizOff(); flipOff()
+        volumeOff(); brightnessOff(); callsOff(); chargeOff(); vizOff(); flipOff(); privacyOff()
         enabled.clear()
     }
 
@@ -113,7 +127,9 @@ class GlyphService : Service() {
             val max = i.getIntExtra("max", 1).coerceAtLeast(1)
             if (level < 0) return
             lastFastLevelAt = android.os.SystemClock.uptimeMillis()
-            showLevel(level.toFloat() / max)
+            val up = level >= lastVolume
+            lastVolume = level
+            showLevel(level.toFloat() / max, settings.volumeStyle, settings.volumeEffect, up)
         }
     }
 
@@ -126,7 +142,7 @@ class GlyphService : Service() {
             val prev = i.getIntExtra("android.media.EXTRA_PREV_VOLUME_STREAM_VALUE", -1)
             if (value < 0 || value == prev) return
             val maxV = audio.getStreamMaxVolume(stream).coerceAtLeast(1)
-            showLevel(value.toFloat() / maxV)
+            showLevel(value.toFloat() / maxV, settings.volumeStyle, settings.volumeEffect, prev < 0 || value >= prev)
         }
     }
 
@@ -147,8 +163,9 @@ class GlyphService : Service() {
             if (!power.isInteractive) return
             val v = SysSettings.System.getInt(contentResolver, SysSettings.System.SCREEN_BRIGHTNESS, -1)
             if (v < 0 || v == lastBrightness) return
+            val up = v > lastBrightness
             lastBrightness = v
-            showLevel(v / 255f, pulseRing = true)
+            showLevel(v / 255f, settings.brightnessStyle, settings.brightnessEffect, up)
         }
     }
 
@@ -159,11 +176,11 @@ class GlyphService : Service() {
 
     private fun brightnessOff() { contentResolver.unregisterContentObserver(brightnessObserver) }
 
-    /** Level on the bottom strip for 1.5 s, then a 300 ms fade. */
-    private fun showLevel(fraction: Float, pulseRing: Boolean = false) {
-        val f = Engine.stripLevel(fraction)
-        if (pulseRing) Zone.ring.forEach { f[it.ordinal] = 25 }
-        Engine.flash(Layer.Indicator, f, 1500)
+    /** Level in the chosen style for 1.5 s, then a 300 ms fade. */
+    private var lastVolume = -1
+
+    private fun showLevel(fraction: Float, style: LevelStyle, effect: PressEffect, up: Boolean) {
+        Engine.flashWithEffect(Layer.Indicator, Engine.level(fraction, style), 1500, effect, up)
     }
 
     // ================================================================ Calls
@@ -174,6 +191,7 @@ class GlyphService : Service() {
                 TelephonyManager.EXTRA_STATE_RINGING -> {
                     // The broadcast arrives twice; only the copy with the number carries caller identity.
                     val number = i.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER) ?: return
+                    if (quiet(ctx)) return
                     val pattern = settings.pattern(contactKey(number)?.let(settings::contactPattern) ?: settings.defaultCallPattern)
                     if (pattern != null) Engine.play(Layer.Call, pattern, loop = true)
                 }
@@ -267,22 +285,21 @@ class GlyphService : Service() {
     // ================================================================ Music visualizer
 
     private var viz: Visualizer? = null
-    private val vizFrame = IntArray(Zone.COUNT)
-    private var bassAvg = 0f
     private var peak = 1f
-    private var smoothed = 0f
 
-    private val vizPoll = object : Runnable {
-        override fun run() {
-            val playing = audio.isMusicActive
-            if (playing && viz == null) startCapture()
-            if (!playing && viz != null) stopCapture()
-            main.postDelayed(this, 1500)
-        }
+    /** Event-driven: no polling. Capture starts when media starts playing and stops when it stops. */
+    private val playbackCallback = object : AudioManager.AudioPlaybackCallback() {
+        override fun onPlaybackConfigChanged(configs: MutableList<android.media.AudioPlaybackConfiguration>) = syncViz()
     }
 
-    private fun vizOn() { main.post(vizPoll) }
-    private fun vizOff() { main.removeCallbacks(vizPoll); stopCapture() }
+    private fun syncViz() {
+        val playing = audio.isMusicActive && power.isInteractive
+        if (playing && viz == null) startCapture()
+        if (!playing && viz != null) stopCapture()
+    }
+
+    private fun vizOn() { audio.registerAudioPlaybackCallback(playbackCallback, main); syncViz() }
+    private fun vizOff() { audio.unregisterAudioPlaybackCallback(playbackCallback); stopCapture() }
 
     private fun startCapture() {
         val v = runCatching { Visualizer(0) }.onFailure { Log.w(TAG, "Visualizer unavailable", it) }.getOrNull() ?: return
@@ -291,12 +308,15 @@ class GlyphService : Service() {
             v.captureSize = 1024.coerceIn(Visualizer.getCaptureSizeRange()[0], Visualizer.getCaptureSizeRange()[1])
             v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                 override fun onWaveFormDataCapture(vis: Visualizer?, waveform: ByteArray?, rate: Int) = Unit
-                override fun onFftDataCapture(vis: Visualizer?, fft: ByteArray?, rate: Int) { if (fft != null) analyse(fft, vis?.samplingRate ?: 44_100_000) }
-            }, (Visualizer.getMaxCaptureRate() / 2).coerceAtMost(30_000), false, true)
+                override fun onFftDataCapture(vis: Visualizer?, fft: ByteArray?, rate: Int) { if (fft != null) vizEngine.capture(fft, vis?.samplingRate ?: 44_100_000) }
+            }, Visualizer.getMaxCaptureRate(), false, true)
             v.enabled = true
         }.onFailure { Log.w(TAG, "Visualizer setup failed", it); v.release(); return }
         viz = v
-        Engine.set(Layer.Visualizer) { vizFrame }
+        vizEngine.sensitivity = settings.vizGain
+        vizEngine.style = settings.vizStyle
+        vizEngine.reset()
+        Engine.set(Layer.Visualizer) { now -> vizEngine.frame(now) }
     }
 
     private fun stopCapture() {
@@ -305,35 +325,7 @@ class GlyphService : Service() {
         Engine.clear(Layer.Visualizer)
     }
 
-    /** Bass drives the strip and the ring beat, mids the diagonal, highs the camera glyph. */
-    private fun analyse(fft: ByteArray, samplingRateMilliHz: Int) {
-        val n = fft.size / 2
-        val hzPerBin = samplingRateMilliHz / 1000f / fft.size
-        fun band(lo: Float, hi: Float): Float {
-            val a = (lo / hzPerBin).toInt().coerceIn(1, n - 1)
-            val b = (hi / hzPerBin).toInt().coerceIn(a + 1, n)
-            var sum = 0f
-            for (k in a until b) sum += hypot(fft[2 * k].toFloat(), fft[2 * k + 1].toFloat())
-            return sum / (b - a)
-        }
-        val bass = band(40f, 160f)
-        val mid = band(400f, 2000f)
-        val high = band(4000f, 12000f)
-        // Auto-gain: follow the loudest recent bass so quiet and loud tracks both fill the strip.
-        peak = max(bass, peak * 0.995f).coerceAtLeast(4f)
-        val gain = 0.5f + settings.vizGain / 100f
-        val level = (bass / peak * gain).coerceIn(0f, 1f)
-        smoothed = max(level, smoothed * 0.82f)
-        val beat = bass > bassAvg * 1.45f && bass > peak * 0.45f
-        bassAvg = bassAvg * 0.9f + bass * 0.1f
-
-        val f = Engine.stripLevel(smoothed)
-        val ring = if (beat) 100 else (smoothed * 40).toInt()
-        Zone.ring.forEach { f[it.ordinal] = ring }
-        f[Zone.B.ordinal] = ((mid / peak) * 120 * gain).toInt().coerceIn(0, 100)
-        f[Zone.A.ordinal] = ((high / peak) * 260 * gain).toInt().coerceIn(0, 100)
-        f.copyInto(vizFrame)
-    }
+    private val vizEngine = VizEngine()
 
     // ================================================================ Ambient + face-down
 
@@ -356,12 +348,74 @@ class GlyphService : Service() {
     private fun flipOff() { sensors.unregisterListener(flipListener); faceDown = false }
 
     private val screenReceiver = object : BroadcastReceiver() {
-        override fun onReceive(ctx: Context, i: Intent) = updateAmbient()
+        override fun onReceive(ctx: Context, i: Intent) {
+            updateAmbient()
+            if ("viz" in enabled) syncViz()
+        }
     }
+
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, i: Intent) {
+            if (quiet(ctx)) return
+            Engine.set(Layer.Indicator, Engine.sweep())
+            // Feel matches the light: a tick as it starts, a click as it reaches the camera.
+            Buzz.fire(Buzz.TICK, android.os.VibrationAttributes.USAGE_TOUCH)
+            main.postDelayed({ Buzz.fire(Buzz.CLICK, android.os.VibrationAttributes.USAGE_TOUCH) }, 560)
+        }
+    }
+
+    // ---- Busy dot sources: notifications (from the listener) + mic and camera use (callbacks).
+    @Volatile private var micBusy = false
+    private val camerasInUse = HashSet<String>()
+    private val cameraManager by lazy { getSystemService(android.hardware.camera2.CameraManager::class.java) }
+
+    private val recordingCallback = object : AudioManager.AudioRecordingCallback() {
+        override fun onRecordingConfigChanged(configs: MutableList<android.media.AudioRecordingConfiguration>) {
+            micBusy = configs.isNotEmpty(); updateBusy()
+        }
+    }
+    private val cameraCallback = object : android.hardware.camera2.CameraManager.AvailabilityCallback() {
+        override fun onCameraUnavailable(id: String) { camerasInUse += id; updateBusy() }
+        override fun onCameraAvailable(id: String) { camerasInUse -= id; updateBusy() }
+    }
+
+    private fun privacyOn() {
+        audio.registerAudioRecordingCallback(recordingCallback, main)
+        micBusy = audio.activeRecordingConfigurations.isNotEmpty()
+        cameraManager.registerAvailabilityCallback(cameraCallback, main)
+    }
+
+    private fun privacyOff() {
+        runCatching { audio.unregisterAudioRecordingCallback(recordingCallback) }
+        runCatching { cameraManager.unregisterAvailabilityCallback(cameraCallback) }
+        micBusy = false; camerasInUse.clear()
+    }
+
+    private var busyMode = 0
+
+    /**
+     * Bottom dot: a steady glow while the mic or a camera is in use (privacy), a slow breathe while
+     * downloads or other background tasks run. 10 fps only, and off when nothing qualifies.
+     */
+    fun updateBusy() = main.post {
+        val s = settings
+        val privacy = s.busyDot && ((s.busyMic && micBusy) || (s.busyCamera && camerasInUse.isNotEmpty()))
+        val work = s.busyDot && ((s.busyDownloads && NotifListener.progressBusy) || (s.busyOngoing && NotifListener.ongoingBusy))
+        val mode = when { privacy -> 2; work -> 1; else -> 0 }
+        if (mode == busyMode && (mode == 0) == !Engine.isActive(Layer.Busy)) return@post
+        busyMode = mode
+        when (mode) {
+            2 -> Engine.set(Layer.Busy) { now -> IntArray(Zone.COUNT).also { it[Zone.E.ordinal] = (55 + 10 * sin(now * 2 * PI / 3000)).toInt() } }
+            1 -> Engine.set(Layer.Busy) { now -> IntArray(Zone.COUNT).also { it[Zone.E.ordinal] = (20 + 60 * (0.5 + 0.5 * sin(now * 2 * PI / 2400))).toInt() } }
+            else -> Engine.clear(Layer.Busy)
+        }
+    }
+
+    fun dropForeground() = main.post { runCatching { stopForeground(STOP_FOREGROUND_REMOVE) } }
 
     /** Unread notifications breathe on the ring while the screen is off (always when face down). */
     fun updateAmbient() {
-        val want = (settings.ambient || (settings.faceDown && faceDown)) && !power.isInteractive && NotifListener.unread > 0
+        val want = (settings.ambient || (settings.faceDown && faceDown)) && !power.isInteractive && NotifListener.unread > 0 && !quiet(this)
         if (want && !Engine.isActive(Layer.Ambient)) {
             Engine.set(Layer.Ambient) { now ->
                 val b = (12 + 38 * (0.5 + 0.5 * sin(now * 2 * PI / 3000))).toInt()
@@ -391,6 +445,12 @@ class GlyphService : Service() {
 
         @Volatile var instance: GlyphService? = null
             private set
+
+        /** True when Do Not Disturb is on and the user wants glyphs to respect it. */
+        fun quiet(ctx: Context): Boolean =
+            Settings(ctx).respectDnd &&
+                ctx.getSystemService(android.app.NotificationManager::class.java).currentInterruptionFilter > android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+
         @Volatile var timerEnd = 0L
             private set
 
@@ -401,7 +461,12 @@ class GlyphService : Service() {
 
         /** Start when any feature is on; otherwise stop. */
         fun sync(ctx: Context) {
-            if (Settings(ctx).anyFeature()) start(ctx) else instance?.apply()
+            // A running service just re-reads its settings; only a stopped one needs starting.
+            val running = instance
+            when {
+                running != null -> running.apply()
+                Settings(ctx).anyFeature() -> start(ctx)
+            }
         }
     }
 }

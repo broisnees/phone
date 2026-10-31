@@ -67,8 +67,10 @@ fun GlyphDiagram(levels: IntArray, modifier: Modifier = Modifier, onZone: ((Zone
                     val fx = p.x / size.width
                     val fy = p.y / size.height
                     // Distance in width units: a height-fraction is 1/ASPECT width-fractions long.
-                    val hit = Zone.entries.minByOrNull { z -> anchor(z).let { hypot((it.x - fx).toDouble(), ((it.y - fy) / ASPECT).toDouble()) } }
-                    if (hit != null) onZone(hit)
+                    fun dist(z: Zone) = anchor(z).let { hypot((it.x - fx).toDouble(), ((it.y - fy) / ASPECT).toDouble()) }
+                    val hit = Zone.entries.minByOrNull(::dist)
+                    // Only taps that land on (or right next to) a light count.
+                    if (hit != null && dist(hit) < 0.16) onZone(hit)
                 }
             },
         ),
