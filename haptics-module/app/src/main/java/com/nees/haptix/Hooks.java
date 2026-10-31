@@ -76,14 +76,13 @@ public class Hooks implements IXposedHookLoadPackage {
         Class<?> expandable = XposedHelpers.findClassIfExists("com.android.systemui.animation.Expandable", cl);
         if (expandable != null) {
             hook(cl, "com.android.systemui.qs.tileimpl.QSTileImpl", "click", new Object[]{expandable},
-                    before(p -> fire(SELECTION, null, GAP, "qs tile")));
+                    before(p -> {}));  // system already provides the QS haptic
         }
 
         // Notification swiped away: fires once when the swipe commits to dismiss.
         hook(cl, "com.android.systemui.SwipeHelper", "dismissChild", new Object[]{View.class, float.class, boolean.class},
                 before(p -> {
-                    if (!p.thisObject.getClass().getName().contains("Notification")) return;
-                    fire(SUCCESS, (View) p.args[0], GAP, "notification dismissed");
+                    // system already provides the dismiss haptic; no-op
                 }));
 
         // Volume: hardware key steps arrive here once per step (with FLAG_SHOW_UI).
@@ -97,7 +96,7 @@ public class Hooks implements IXposedHookLoadPackage {
         hook(cl, vc, "onSetStreamVolumeW", new Object[]{int.class, int.class}, after(p ->
                 volumeStep((int) p.args[0], SLIDER_GAP, "volume slider")));
         hook(cl, vc, "onSetRingerModeW", new Object[]{int.class, boolean.class}, before(p -> {
-            if (!(boolean) p.args[1]) fire(IMPACT, null, GAP, "ringer mode");
+            // system already haptics on ringer change; no-op
         }));
     }
 
@@ -123,11 +122,8 @@ public class Hooks implements IXposedHookLoadPackage {
         AudioManager am = ctx.getSystemService(AudioManager.class);
         int level = am.getStreamVolume(stream);
         notifyGlyph(ctx, level, am.getStreamMaxVolume(stream));
-        int prev = lastLevel.get(stream, Integer.MIN_VALUE);
+        // Glyph indicator only; Nothing OS already provides the volume haptic (no double buzz).
         lastLevel.put(stream, level);
-        if (level == prev) return; // pressing against a limit
-        boolean boundary = level >= am.getStreamMaxVolume(stream) || level <= am.getStreamMinVolume(stream);
-        fire(boundary ? SUCCESS : SELECTION, null, gap, why + (boundary ? " limit" : ""));
     }
 
     // ---------------------------------------------------------------- Launcher
@@ -138,10 +134,10 @@ public class Hooks implements IXposedHookLoadPackage {
             // Every icon tap (workspace, dock, app drawer, search) funnels through here.
             hook(cl, "com.android.launcher3.Launcher", "startActivitySafely",
                     new Object[]{View.class, android.content.Intent.class, itemInfo},
-                    before(p -> fire(IMPACT, (View) p.args[0], GAP, "app launch")));
+                    before(p -> {}));  // launcher already haptics on tap
         }
 
-        XC_MethodHook folder = before(p -> fire(IMPACT, (View) p.thisObject, GAP, "folder open"));
+        XC_MethodHook folder = before(p -> {});  // launcher already haptics
         hook(cl, "com.android.launcher3.folder.Folder", "animateOpen", new Object[]{}, folder);
         hook(cl, "com.android.launcher3.folder.Folder", "animateOpen", new Object[]{java.util.List.class, int.class}, folder);
 
@@ -155,8 +151,7 @@ public class Hooks implements IXposedHookLoadPackage {
                         if (target == null) return;
                         String name = ((Enum<?>) target).name();
                         View v = viewField(p.thisObject, "mRecentsView");
-                        if ("HOME".equals(name)) fire(SUCCESS, v, GAP, "gesture home");
-                        else if ("RECENTS".equals(name)) fire(SELECTION, v, GAP, "gesture recents");
+                        // gesture nav already provides home/recents haptics; no-op
                     }));
         }
 
@@ -164,7 +159,7 @@ public class Hooks implements IXposedHookLoadPackage {
         Class<?> recents = XposedHelpers.findClassIfExists("com.android.quickstep.views.RecentsView", cl);
         if (recents != null) {
             hook(cl, "com.android.launcher3.PagedView", "onPageEndTransition", new Object[]{}, after(p -> {
-                if (recents.isInstance(p.thisObject)) fire(SELECTION, (View) p.thisObject, GAP, "recents snap");
+                // recents carousel already haptics; no-op
             }));
         }
     }
