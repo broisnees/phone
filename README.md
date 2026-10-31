@@ -38,6 +38,13 @@ Vector's "Vector loaded" notification turned off: `/data/adb/lspd/cli config set
 
 **Glyph Tweaks v7 (2026-10-31):** the ⚡ blink became a per-row press-effect picker (`PressEffect`): Off, Flash (diagonal), Chase (head + tail racing all 15 lights along the path in 320 ms), Spin (two laps of the ring), Sparkle (7 random lights twinkling). Direction-aware (volume/brightness up runs forward, down runs backward), drawn at full LED power on top of the level. Defaults: volume Chase, brightness Off. LED-map walk-through run (hw channels 1–16, 2.5 s each) — awaiting the user's mismatch report to correct `Zone.hw`.
 
+
+### Fonts switcher (2026-10-31)
+Two OFL system fonts, one active at a time (SF Pro / Google Sans are proprietary — not bundled):
+- `nees_interfont` — Inter (SF-Pro-like), **active**.
+- `nees_robotoflex` — Roboto Flex (Google's own, Pixel base), staged/disabled.
+Switch: `adb shell su -c 'sh /data/adb/fontswitch inter|roboto|stock'` then reboot. Sources in `fonts/` (rf_module), zips in `install/`.
+
 ## Protection & battery (2026-10-31)
 - **Bootloop protector**: YetAnotherBootloopProtector v8.138 (reviewed: local-only scripts). 3 failed boots, boot > 100 s, zygote/SystemUI crash-loop or SystemUI dead > 25 s → disables all modules + `service.d` scripts, reboots. Log: `/data/local/tmp/service.log`. Whitelist: `/data/adb/YABP/allowed-modules.txt`. Re-enable modules afterwards in Magisk (or its action button).
 - **Charge limit** (`nees_chargelimit`, source `chargelimit/`): pauses at 80 %, resumes at 75 % via `/sys/class/qcom-battery/usb_charger_en` (0 = charger input off, 1 = on). Change limits in `/data/adb/chargelimit.conf` (`PAUSE=`/`RESUME=`). Removing the module re-enables charging. ACC removed (it couldn't find a switch).
@@ -328,3 +335,23 @@ Root-powered Glyph app. Source `glyph-app/`, APK `install/GlyphTweaks.apk`.
 **Disable:** turn features off in the app (service stops), or `adb shell am force-stop com.nees.glyph`; uninstall: `adb uninstall com.nees.glyph`. If LEDs are ever left lit: `adb shell su -c 'echo 0 > /sys/class/leds/aw210xx_led/all_white_leds_br'`.
 
 **Verified:** service starts in foreground; volume up/down lit strip D1–D3 at 70 % (reg read-back) and faded to 0; all 15 zones distinct; no crashes. **Not verified on device:** brightness indicator, visualizer, calls, notifications, meters, tiles (need real use). Our frames override Nothing's own Glyph while an effect is active; when idle we leave the LEDs alone.
+
+
+## Display: full-screen / no-letterbox (2026-10-31)
+
+Magisk module **nees_fullscreen** (source `display-fix/module/`, zip `install/FullScreen-magisk.zip`).
+
+**(A) No letterbox — works.** Two layers, applied by the module's `service.sh` at every boot:
+- Global `settings put global force_resizable_activities 1` — makes activities resizable so they fill the 20:9 display instead of showing black bars. (Standard developer-option; needs one reboot to take effect.)
+- Per-app aspect override for stubborn apps: `am compat enable OVERRIDE_MIN_ASPECT_RATIO <pkg>` + `OVERRIDE_MIN_ASPECT_RATIO_LARGE <pkg>`, read from `/data/adb/fullscreen/apps.txt`, skipping `/data/adb/fullscreen/exclude.txt`.
+- Excludes by default: `com.nothing.camera`, `org.codeaurora.snapcam` (viewfinders distort if forced). Add more apps to force by editing `apps.txt`; add apps to protect in `exclude.txt`.
+
+**(B) Status/nav bar waste — partial, by design.** Nav is already gesture mode (`navigation_mode=2`), so the bottom is already just the thin pill. There is **no safe global way to hide the status bar on Android 15** (`policy_control immersive` is unreliable and SystemUI may ignore it; hiding it breaks the clock/notifications). Left as-is. `force_resizable` already lets modern apps draw edge-to-edge under the bars.
+
+**Test:** reboot, then open an app that showed black bars before (an old app, or one you'd set to "Default aspect ratio"). It should now fill the screen. If one still shows bars, add its package to `/data/adb/fullscreen/apps.txt` and reboot (or run the two `am compat enable` lines + `am force-stop <pkg>`).
+
+**Add an app now without reboot:** `adb shell su -c 'am compat enable OVERRIDE_MIN_ASPECT_RATIO <pkg>; am compat enable OVERRIDE_MIN_ASPECT_RATIO_LARGE <pkg>; am force-stop <pkg>'`
+
+**Revert:** uninstall the module in Magisk (restores `force_resizable` off on next boot), or now: `adb shell su -c 'settings delete global force_resizable_activities'`. Undo one app's aspect override: `adb shell su -c 'am compat reset-all <pkg>'`.
+
+**Risks:** a few apps may render oddly when forced resizable (rare, reversible); camera/games excluded; forcing aspect on a fixed-portrait game can crop it — use the exclude list.
