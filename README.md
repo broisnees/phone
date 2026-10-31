@@ -355,3 +355,17 @@ Magisk module **nees_fullscreen** (source `display-fix/module/`, zip `install/Fu
 **Revert:** uninstall the module in Magisk (restores `force_resizable` off on next boot), or now: `adb shell su -c 'settings delete global force_resizable_activities'`. Undo one app's aspect override: `adb shell su -c 'am compat reset-all <pkg>'`.
 
 **Risks:** a few apps may render oddly when forced resizable (rare, reversible); camera/games excluded; forcing aspect on a fixed-portrait game can crop it — use the exclude list.
+
+## Nees Launcher (home screen) — DEFAULT (2026-10-31)
+
+Custom Compose launcher (`com.nees.launcher`, source `launcher-app/`, APK `install/NeesLauncher.apk`). Set as the default home; **Nothing Launcher is still installed** — revert via Settings → Apps → Default apps → Home app, or `adb shell su -c 'cmd package set-home-activity com.nothing.launcher/com.android.launcher3.uioverrides.QuickstepLauncher'`.
+
+**Features (v1):**
+- Home: pages (swipe), 5×5 grid, bottom dock (up to 5), page dots, wallpaper behind (transparent window). Long-press item → App info / Remove (Resize for widgets, Open for folders); long-press empty → Widgets / Wallpaper / Launcher settings.
+- App drawer: swipe up on home; alphabetical, searchable (Enter launches top hit). Long-press an app in the drawer adds it to the home grid.
+- Widgets: AppWidgetHost; pick → bind (uses the app's BIND_APPWIDGET permission) → configure → placed on the grid; resize by whole cells; persisted.
+- Folders: drag one app onto another → folder; open popup, rename, long-press a child to remove. Icon packs: detects installed packs (ADW/Nova/Apex THEME actions), applies `appfilter.xml` mapping + mask fallback; pick under Launcher settings.
+- Gestures: double-tap home → screen off (root `input keyevent 26`); swipe down on home → notification shade; swipe up → app drawer.
+- Perf: icons load off-main-thread + LRU-cached; AOT-compiled. Measured ~75 MB PSS, 0.0 % CPU idle, 0 crashes on cold start.
+
+**Known limits:** dragging an icon between pages isn't wired yet (drag works within a page + to the dock); "Glyph sweep on unlock" needs a `com.nees.glyph.SWEEP` receiver added to Glyph Tweaks (hook documented, not yet added); widget bind may prompt once if the system doesn't auto-grant. LED-map walk-through for Glyph still pending the user's mismatch report (separate app).
