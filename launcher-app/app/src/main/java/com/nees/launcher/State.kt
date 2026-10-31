@@ -1,6 +1,7 @@
 package com.nees.launcher
 
 import android.content.Context
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -11,6 +12,9 @@ class LauncherState(val ctx: Context) {
     val favourites: SnapshotStateList<Fav> = mutableStateListOf()
     val hidden = mutableStateOf<Set<String>>(emptySet())
     val widgetIds: SnapshotStateList<Int> = mutableStateListOf()
+    /** Bumped on each home resume so time-based widgets (Claude usage) refresh immediately. */
+    val resumeTick = mutableIntStateOf(0)
+    fun bumpResume() { resumeTick.intValue++ }
 
     fun load() {
         favourites.clear(); favourites.addAll(store.favourites())

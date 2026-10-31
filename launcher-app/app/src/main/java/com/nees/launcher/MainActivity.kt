@@ -104,6 +104,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         wallpaper = state.store.showWallpaper
+        state.bumpResume()
         if (wallpaper) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
         ensureBlackWallpaper()

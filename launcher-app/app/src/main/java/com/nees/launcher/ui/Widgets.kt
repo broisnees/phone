@@ -102,7 +102,7 @@ fun NativeWidgets(state: LauncherState, onClockTap: () -> Unit, onAlarmTap: () -
 
         if (s.showClaude) {
             Spacer(Modifier.height(S.l))
-            ClaudeWidget()
+            ClaudeWidget(state)
         }
     }
 }
@@ -112,13 +112,13 @@ private fun dateStyle() = T.title.copy(fontWeight = FontWeight.Medium, fontSize 
 
 /** Claude Code 5-hour window: tokens used + reset countdown + thin elapsed bar. Reads via root. */
 @Composable
-private fun ClaudeWidget() {
+private fun ClaudeWidget(state: LauncherState) {
     val ctx = LocalContext.current
-    // Own 60s refresh loop; root read on IO. Cancels when it leaves composition (home hidden).
-    val usage by produceState<ClaudeUsage?>(null) {
+    // Refresh every 5 min while home is visible, and immediately on each home resume. Root read on IO.
+    val usage by produceState<ClaudeUsage?>(null, state.resumeTick.intValue) {
         while (true) {
             value = withContext(Dispatchers.IO) { runCatching { Claude.read(ctx) }.getOrNull() }
-            delay(60_000)
+            delay(300_000)
         }
     }
     Column(Modifier.fillMaxWidth()) {
@@ -127,26 +127,29 @@ private fun ClaudeWidget() {
         val u = usage
         when {
             u == null || !u.present -> Text("—", style = T.title.copy(fontWeight = FontWeight.Normal), color = C.text3)
-            !u.active -> {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("ready", style = T.title.copy(fontWeight = FontWeight.Normal), color = C.text)
-                    Text("  new 5h window", style = T.sub, color = C.text2, modifier = Modifier.padding(bottom = 3.dp))
-                }
-            }
             else -> {
                 val now = System.currentTimeMillis()
-                val remain = (u.resetAt - now).coerceAtLeast(0)
-                val h = remain / 3_600_000
-                val m = (remain % 3_600_000) / 60_000
-                val elapsed = ((now - u.windowStart).toFloat() / (u.resetAt - u.windowStart)).coerceIn(0f, 1f)
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(fmt(u.usedTokens), style = T.title.copy(fontWeight = FontWeight.Normal).tabular(), color = C.text)
-                    Text("  tokens · resets in ${h}h ${m}m", style = T.sub.tabular(), color = C.text2, modifier = Modifier.padding(bottom = 3.dp))
+                if (u.active) {
+                    val remain = (u.resetAt - now).coerceAtLeast(0)
+                    val h = remain / 3_600_000
+                    val m = (remain % 3_600_000) / 60_000
+                    val elapsed = ((now - u.windowStart).toFloat() / (u.resetAt - u.windowStart)).coerceIn(0f, 1f)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(fmt(u.usedTokens), style = T.title.copy(fontWeight = FontWeight.Normal).tabular(), color = C.text)
+                        Text("  tokens · resets in ${h}h ${m}m", style = T.sub.tabular(), color = C.text2, modifier = Modifier.padding(bottom = 3.dp))
+                    }
+                    Spacer(Modifier.height(S.s))
+                    Box(Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)).background(C.hairline)) {
+                        Box(Modifier.fillMaxWidth(elapsed).height(2.dp).background(C.text))
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("ready", style = T.title.copy(fontWeight = FontWeight.Normal), color = C.text)
+                        Text("  new 5h window", style = T.sub, color = C.text2, modifier = Modifier.padding(bottom = 3.dp))
+                    }
                 }
                 Spacer(Modifier.height(S.s))
-                Box(Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)).background(C.hairline)) {
-                    Box(Modifier.fillMaxWidth(elapsed).height(2.dp).background(C.text))
-                }
+                Text("Today ${fmt(u.todayTokens)}  ·  Week ${fmt(u.weekTokens)}", style = T.sub.tabular(), color = C.text3)
             }
         }
     }

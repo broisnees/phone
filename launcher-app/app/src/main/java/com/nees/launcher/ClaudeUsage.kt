@@ -11,6 +11,8 @@ data class ClaudeUsage(
     val usedTokens: Long,
     val windowStart: Long,
     val resetAt: Long,
+    val todayTokens: Long = 0,
+    val weekTokens: Long = 0,
 )
 
 object Claude {
@@ -20,7 +22,7 @@ object Claude {
     // Extracts "ISO8601 sumTokens" per assistant line from files modified in the last 6h.
     private val SCRIPT = """
         DIR=$PROJECTS
-        files=${'$'}(find "${'$'}DIR" -name '*.jsonl' -mmin -360 2>/dev/null)
+        files=${'$'}(find "${'$'}DIR" -name '*.jsonl' -mtime -7 2>/dev/null)
         [ -z "${'$'}files" ] && { echo NONE; exit 0; }
         awk '
         /"output_tokens"/{
@@ -69,8 +71,12 @@ object Claude {
         val reset = blockStart + FIVE_H
         val now = System.currentTimeMillis()
         val active = now < reset
-        // Expired window → nothing counts until the next message; show a ready/zero state.
-        return if (active) ClaudeUsage(true, true, sum, blockStart, reset)
-        else ClaudeUsage(true, false, 0, blockStart, reset)
+        val midnight = java.time.LocalDate.now(java.time.ZoneId.systemDefault())
+            .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val weekStart = now - 7L * 24 * 60 * 60 * 1000
+        val today = rows.filter { it.first >= midnight }.sumOf { it.second }
+        val week = rows.filter { it.first >= weekStart }.sumOf { it.second }
+        // Expired window → nothing counts in the 5h window until the next message; today/week still shown.
+        return ClaudeUsage(true, active, if (active) sum else 0, blockStart, reset, today, week)
     }
 }

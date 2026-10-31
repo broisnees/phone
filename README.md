@@ -388,3 +388,9 @@ Olauncher/Niagara-style launcher (`com.nees.launcher`, source `launcher-app/`, A
 - **Drawer auto-focus:** opening the drawer (swipe up) focuses the search field and raises the keyboard immediately; keyboard hides on close/launch. Home never steals focus.
 - `glyphOnOpen` now defaults ON (Glyph Tweaks has the `com.nees.glyph.SWEEP` receiver).
 - Perf: **51 MB PSS, 0.0% CPU idle, 0 crashes.** Root su resolved by absolute path + `--mount-master`.
+
+
+### Claude widget v2 (2026-10-31, later)
+- Scans jsonl modified in the last **7 days** (`find -mtime -7`) via `su --mount-master`, parses once off-main-thread, and shows three figures: the **5-hour window** (`<used> tokens · resets in Hh Mm` + elapsed bar), and a line **`Today <x> · Week <y>`** (today = since local midnight; week = last 7×24h; both = input+output+cache_creation+cache_read).
+- Refresh changed to **every 5 minutes** while home is visible, plus an immediate refresh on each home resume (via `LauncherState.resumeTick`). Caches last value; shows "—" if Termux/Claude files or root are unavailable.
+- Live numbers read on this device: window **4.6M**, Today **4.6M**, Week **4.6M** (all equal — the phone was set up today, so all usage is within today). Perf: **38.8 MB PSS settled, 0.0% CPU idle, 0 crashes.**
