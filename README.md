@@ -394,3 +394,15 @@ Olauncher/Niagara-style launcher (`com.nees.launcher`, source `launcher-app/`, A
 - Scans jsonl modified in the last **7 days** (`find -mtime -7`) via `su --mount-master`, parses once off-main-thread, and shows three figures: the **5-hour window** (`<used> tokens · resets in Hh Mm` + elapsed bar), and a line **`Today <x> · Week <y>`** (today = since local midnight; week = last 7×24h; both = input+output+cache_creation+cache_read).
 - Refresh changed to **every 5 minutes** while home is visible, plus an immediate refresh on each home resume (via `LauncherState.resumeTick`). Caches last value; shows "—" if Termux/Claude files or root are unavailable.
 - Live numbers read on this device: window **4.6M**, Today **4.6M**, Week **4.6M** (all equal — the phone was set up today, so all usage is within today). Perf: **38.8 MB PSS settled, 0.0% CPU idle, 0 crashes.**
+
+
+### BlackWA — WhatsApp AMOLED (2026-10-31)
+LSPosed (Vector) module (`com.nees.blackwa`) that forces official WhatsApp (`com.whatsapp`) and WhatsApp Business (`com.whatsapp.w4b`) into true-black AMOLED. Built because the user's WhatsApp (v2.26.42) is newer than WaEnhancer supports, so a version-independent approach was needed.
+
+- **How it works (framework-level, not WhatsApp's classes):** hooks `View#setBackgroundColor/setBackground/setBackgroundDrawable`, `Window#setBackgroundDrawable/setStatusBarColor/setNavigationBarColor`, and `Activity#onCreate`. Any **opaque, low-saturation, dark neutral grey** surface (WhatsApp's dark greys ~#0B141A/#111B21/#1F2C34/#121212) is retinted — darkest greys → **#000000**, slightly-lighter greys (toolbars, incoming bubbles) → **#0E0E0E** so they stay faintly distinguishable. WhatsApp's **greens, reds and whites are left untouched** (saturation + lightness gate). Window + system bars forced black per activity. Because it recolours at the Android framework level, it survives WhatsApp updates (no obfuscated-class dependency). Everything is wrapped in try/catch — zero crashes; retint counts logged via `XposedBridge.log("BlackWA: …")`.
+- **Precondition:** WhatsApp must be in its own **Dark** theme (Settings → Chats → Theme → Dark). The module only darkens already-dark greys; it does not convert light mode.
+- **User steps:** (1) WhatsApp → Settings → Chats → Theme → **Dark**. (2) Fully close and reopen WhatsApp (already force-stopped by the installer, so just open it). Surfaces should be pure black.
+- **Disable:** `adb shell su -c '/data/adb/lspd/cli modules disable com.nees.blackwa'` then force-stop WhatsApp. Or uninstall `com.nees.blackwa`.
+- **Verify hooks loaded:** `adb shell su -c 'grep -a BlackWA $(ls -t /data/adb/lspd/log/modules_*.log|head -1)|tail'`
+- **APK:** `install/BlackWA.apk`.
+- **Ban-risk note:** any WhatsApp Xposed mod carries a small account-ban risk. This is lighter-touch than WaEnhancer — it only recolours view backgrounds, hooking no WhatsApp internals, network, or message logic — but the risk is non-zero; use on an account you accept that risk for.
