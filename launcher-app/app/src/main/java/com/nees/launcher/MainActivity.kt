@@ -5,9 +5,11 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
@@ -16,69 +18,70 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.lifecycleScope
+import com.nees.launcher.ui.C
 import com.nees.launcher.ui.Drawer
-import com.nees.launcher.ui.FolderPopup
+import com.nees.launcher.ui.DrawerAppMenu
+import com.nees.launcher.ui.FavMenu
 import com.nees.launcher.ui.HomeMenu
 import com.nees.launcher.ui.HomeScreen
-import com.nees.launcher.ui.ItemSheet
 import com.nees.launcher.ui.LauncherTheme
-import com.nees.launcher.ui.SettingsSheet
+import com.nees.launcher.ui.RenameDialog
+import com.nees.launcher.ui.SettingsScreen
 import com.nees.launcher.ui.WidgetPicker
-import com.nees.launcher.ui.WidgetResize
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var state: LauncherState
-    private var pendingProvider: AppWidgetProviderInfo? = null
     private var pendingId = -1
+    private var pendingProvider: AppWidgetProviderInfo? = null
     private var drawerOpen by mutableStateOf(false)
+    private var settingsOpen by mutableStateOf(false)
+    private var wallpaper by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         state = LauncherState(this)
         state.load()
+        wallpaper = state.store.showWallpaper
+        AppRepo.init(this, lifecycleScope)
 
-        val density = resources.displayMetrics.density
-        val iconPx = (56 * density).toInt()
-        AppRepo.init(this, lifecycleScope, iconPx, state.store.iconPack)
-        state.columns = state.store.columns
-        state.rows = state.store.rows
-
-        // Seed the dock once apps have loaded.
         lifecycleScope.launch {
             snapshotFlow { AppRepo.apps.value }.collect { list ->
-                if (list.isNotEmpty() && state.items.isEmpty()) state.seedIfEmpty()
+                if (list.isNotEmpty() && state.favourites.isEmpty()) state.seedIfEmpty()
             }
         }
 
         setContent {
             LauncherTheme {
-                var sheetItem by remember { mutableStateOf<Item?>(null) }
+                var favMenu by remember { mutableStateOf<Fav?>(null) }
+                var drawerMenu by remember { mutableStateOf<AppInfo?>(null) }
+                var rename by remember { mutableStateOf<Fav?>(null) }
                 var homeMenu by remember { mutableStateOf(false) }
-                var folder by remember { mutableStateOf<Item?>(null) }
                 var widgetPicker by remember { mutableStateOf(false) }
-                var settings by remember { mutableStateOf(false) }
-                var resize by remember { mutableStateOf<Item?>(null) }
 
-                Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().background(if (wallpaper) Color.Transparent else C.bg)) {
                     HomeScreen(
                         state = state,
                         onOpenDrawer = { drawerOpen = true },
-                        onLongItem = { if (it.type == ItemType.FOLDER) folder = it else sheetItem = it },
-                        onEmptyLongPress = { homeMenu = true },
+                        onLongFav = { favMenu = it },
+                        onEmptyLong = { homeMenu = true },
                         onDoubleTap = { if (state.store.doubleTapLock) Sys.screenOff() },
                         onSwipeDown = { if (state.store.swipeDownNotifications) Sys.expandNotifications(this@MainActivity) },
+                        onClockTap = { openClock() },
+                        onAlarmTap = { openAlarm() },
                     )
 
-                    if (drawerOpen) Drawer(state, onClose = { drawerOpen = false }, onLongApp = { state.addApp(it) })
-                    sheetItem?.let { ItemSheet(state, it, onDismiss = { sheetItem = null }, onOpenFolder = { folder = it }, onResizeWidget = { resize = it }) }
-                    if (homeMenu) HomeMenu(onWidgets = { widgetPicker = true }, onWallpaper = { pickWallpaper() }, onSettings = { settings = true }, onDismiss = { homeMenu = false })
-                    folder?.let { FolderPopup(state, it, onDismiss = { folder = null }) }
+                    if (drawerOpen) Drawer(state, onClose = { drawerOpen = false }, onLongApp = { drawerMenu = it })
+                    if (settingsOpen) SettingsScreen(state, onAddWidget = { widgetPicker = true }, onClose = { settingsOpen = false })
+
+                    favMenu?.let { FavMenu(state, it, onDismiss = { favMenu = null }, onRename = { rename = it }) }
+                    drawerMenu?.let { DrawerAppMenu(state, it, onDismiss = { drawerMenu = null }) }
+                    rename?.let { RenameDialog(state, it, onDismiss = { rename = null }) }
+                    if (homeMenu) HomeMenu(onAddWidget = { widgetPicker = true }, onWallpaper = { pickWallpaper() }, onSettings = { settingsOpen = true }, onDismiss = { homeMenu = false })
                     if (widgetPicker) WidgetPicker(state, onPick = { widgetPicker = false; requestWidget(it) }, onDismiss = { widgetPicker = false })
-                    if (settings) SettingsSheet(state, onDismiss = { settings = false })
-                    resize?.let { WidgetResize(state, it, onDismiss = { resize = null }) }
                 }
             }
         }
@@ -94,78 +97,72 @@ class MainActivity : ComponentActivity() {
         runCatching { App.instance.widgetHost.stopListening() }
     }
 
-    /** HOME pressed while already here: close overlays, go back to first page. */
+    override fun onResume() {
+        super.onResume()
+        wallpaper = state.store.showWallpaper
+        if (wallpaper) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        drawerOpen = false
-        if (state.store.glyphOnOpen) Sys.glyphPulse(this)
+        if (settingsOpen) settingsOpen = false
+        else if (drawerOpen) drawerOpen = false
+        else if (state.store.glyphOnOpen) Sys.glyphPulse(this)
     }
 
     override fun onBackPressed() {
-        if (drawerOpen) { drawerOpen = false; return }
-        // Home: stay put (don't leave the launcher).
+        when {
+            settingsOpen -> settingsOpen = false
+            drawerOpen -> drawerOpen = false
+            // else: stay on home
+        }
     }
 
-    // ---- wallpaper
+    private fun openClock() = runCatching {
+        startActivity(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    private fun openAlarm() = openClock()
+
     private fun pickWallpaper() {
-        runCatching { startActivity(Intent(WallpaperManager.getInstance(this).getCropAndSetWallpaperIntent(android.net.Uri.EMPTY))) }
-            .onFailure { runCatching { startActivity(Intent(Intent.ACTION_SET_WALLPAPER)) } }
+        runCatching { startActivity(Intent(Intent.ACTION_SET_WALLPAPER)) }
     }
 
-    // ---- widgets
+    // ---- third-party widgets (secondary)
     private fun requestWidget(provider: AppWidgetProviderInfo) {
-        val host = App.instance.widgetHost
-        val id = host.allocateAppWidgetId()
-        pendingProvider = provider
-        pendingId = id
-        val allowed = App.instance.widgetManager.bindAppWidgetIdIfAllowed(id, provider.provider)
-        if (allowed) {
-            configureOrAdd()
-        } else {
-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider)
-            }
+        val id = App.instance.widgetHost.allocateAppWidgetId()
+        pendingId = id; pendingProvider = provider
+        if (App.instance.widgetManager.bindAppWidgetIdIfAllowed(id, provider.provider)) configureOrAdd()
+        else {
             @Suppress("DEPRECATION")
-            startActivityForResult(intent, REQ_BIND)
+            startActivityForResult(
+                Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider),
+                REQ_BIND,
+            )
         }
     }
 
     private fun configureOrAdd() {
         val provider = pendingProvider ?: return
-        if (provider.configure != null) {
-            runCatching {
-                @Suppress("DEPRECATION")
-                App.instance.widgetHost.startAppWidgetConfigureActivityForResult(this, pendingId, 0, REQ_CONFIG, null)
-            }.onFailure { addPending() }
-        } else addPending()
+        if (provider.configure != null) runCatching {
+            @Suppress("DEPRECATION")
+            App.instance.widgetHost.startAppWidgetConfigureActivityForResult(this, pendingId, 0, REQ_CONFIG, null)
+        }.onFailure { add() } else add()
     }
 
-    private fun addPending() {
-        val provider = pendingProvider ?: return
-        val cols = (provider.minWidth / cellUnitPx() + 1).coerceIn(1, state.columns)
-        val rowsSpan = (provider.minHeight / cellUnitPx() + 1).coerceIn(1, state.rows)
-        state.addWidget(pendingId, cols, rowsSpan)
-        pendingProvider = null; pendingId = -1
-    }
+    private fun add() { if (pendingId >= 0) state.addWidget(pendingId); pendingId = -1; pendingProvider = null }
 
-    private fun cellUnitPx(): Int {
-        val w = resources.displayMetrics.widthPixels
-        return (w / state.columns).coerceAtLeast(1)
-    }
+    private fun cancel() { if (pendingId >= 0) runCatching { App.instance.widgetHost.deleteAppWidgetId(pendingId) }; pendingId = -1; pendingProvider = null }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
-            REQ_BIND -> if (resultCode == RESULT_OK) configureOrAdd() else cancelPending()
-            REQ_CONFIG -> if (resultCode == RESULT_OK) addPending() else cancelPending()
+            REQ_BIND -> if (resultCode == RESULT_OK) configureOrAdd() else cancel()
+            REQ_CONFIG -> if (resultCode == RESULT_OK) add() else cancel()
         }
-    }
-
-    private fun cancelPending() {
-        if (pendingId >= 0) runCatching { App.instance.widgetHost.deleteAppWidgetId(pendingId) }
-        pendingProvider = null; pendingId = -1
     }
 
     companion object {

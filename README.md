@@ -356,16 +356,25 @@ Magisk module **nees_fullscreen** (source `display-fix/module/`, zip `install/Fu
 
 **Risks:** a few apps may render oddly when forced resizable (rare, reversible); camera/games excluded; forcing aspect on a fixed-portrait game can crop it — use the exclude list.
 
-## Nees Launcher (home screen) — DEFAULT (2026-10-31)
 
-Custom Compose launcher (`com.nees.launcher`, source `launcher-app/`, APK `install/NeesLauncher.apk`). Set as the default home; **Nothing Launcher is still installed** — revert via Settings → Apps → Default apps → Home app, or `adb shell su -c 'cmd package set-home-activity com.nothing.launcher/com.android.launcher3.uioverrides.QuickstepLauncher'`.
+## Nees Launcher (minimal text launcher) — DEFAULT (2026-10-31)
 
-**Features (v1):**
-- Home: pages (swipe), 5×5 grid, bottom dock (up to 5), page dots, wallpaper behind (transparent window). Long-press item → App info / Remove (Resize for widgets, Open for folders); long-press empty → Widgets / Wallpaper / Launcher settings.
-- App drawer: swipe up on home; alphabetical, searchable (Enter launches top hit). Long-press an app in the drawer adds it to the home grid.
-- Widgets: AppWidgetHost; pick → bind (uses the app's BIND_APPWIDGET permission) → configure → placed on the grid; resize by whole cells; persisted.
-- Folders: drag one app onto another → folder; open popup, rename, long-press a child to remove. Icon packs: detects installed packs (ADW/Nova/Apex THEME actions), applies `appfilter.xml` mapping + mask fallback; pick under Launcher settings.
-- Gestures: double-tap home → screen off (root `input keyevent 26`); swipe down on home → notification shade; swipe up → app drawer.
-- Perf: icons load off-main-thread + LRU-cached; AOT-compiled. Measured ~75 MB PSS, 0.0 % CPU idle, 0 crashes on cold start.
+Olauncher/Niagara-style launcher (`com.nees.launcher`, source `launcher-app/`, APK `install/NeesLauncher.apk`). Pure dark, true-black, monochrome; typography-led, no app icons. Default home; **Nothing Launcher still installed** — revert via Settings → Apps → Default apps → Home app, or `adb shell su -c 'cmd package set-home-activity com.nothing.launcher/com.android.launcher3.uioverrides.QuickstepLauncher'`.
 
-**Known limits:** dragging an icon between pages isn't wired yet (drag works within a page + to the dock); "Glyph sweep on unlock" needs a `com.nees.glyph.SWEEP` receiver added to Glyph Tweaks (hook documented, not yet added); widget bind may prompt once if the system doesn't auto-grant. LED-map walk-through for Glyph still pending the user's mismatch report (separate app).
+**Design:** `#000000` everywhere, white primary / grey (`#8A8A8E`) secondary text, no cards, no colour, no elevation. Inter font; big clock with tight tracking. Status-bar/nav insets respected.
+
+**Home (text only):**
+- Native monochrome widgets: large CLOCK, date, BATTERY %, NEXT ALARM (each toggleable; tap clock/alarm → Clock app). One minute-aligned ticker, near-zero cost.
+- Favourites as a left-aligned plain-text stack. Tap → launch; long-press → Rename (alias) / Remove from home / Hide app / App info.
+- Long-press empty → Add widget / Wallpaper / Settings. Double-tap → screen off. Swipe down → notifications. Swipe up → drawer.
+- Background defaults to solid true-black; "Show wallpaper" setting flips `FLAG_SHOW_WALLPAPER`.
+
+**App drawer (swipe up):** searchable true-black text list, no icons, alphabetical; type to filter, Enter launches top hit; long-press → Add to home / Hide / App info. Hidden apps are excluded from the drawer and home.
+
+**Settings screen:** toggles (clock/date/battery/alarm, show wallpaper, double-tap lock, swipe-down notifications, glyph-on-open — now default ON), reorder/remove favourites, manage (unhide) hidden apps, add widget.
+
+**Widgets:** native ones above are first-class. Third-party AppWidgetHost widgets are secondary — pick → bind → configure → stacked full-width on home, true-black clipped.
+
+**Perf:** no icon bitmaps anywhere; app list loads off-main-thread. Settled **76 MB PSS** (Graphics 42 MB = fullscreen surface, Java heap 4.4 MB), **0.0 % CPU idle**, 0 crashes. Before (icon grid): 102 MB with icons loaded.
+
+**Known limits:** "Glyph sweep on open" sends `com.nees.glyph.SWEEP` (default on) — needs Glyph Tweaks to handle that action; third-party widget bind may prompt once. No per-page grid (by design — it's a text launcher).
