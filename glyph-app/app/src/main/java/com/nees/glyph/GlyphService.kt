@@ -91,7 +91,14 @@ class GlyphService : Service() {
         vizEngine.sensitivity = settings.vizGain
         vizEngine.style = settings.vizStyle
         vizEngine.onKick = if (settings.vizHaptics) ({ Buzz.fire(Buzz.TICK, android.os.VibrationAttributes.USAGE_MEDIA, minGapMs = 150) }) else null
-        toggle("unlock", settings.unlockAnim, { registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT)) }, { runCatching { unregisterReceiver(unlockReceiver) } })
+        toggle("unlock", settings.unlockAnim, {
+            registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
+            // Nees Launcher pings this when you open it / the app drawer.
+            registerReceiver(sweepReceiver, IntentFilter("com.nees.glyph.SWEEP"), RECEIVER_EXPORTED)
+        }, {
+            runCatching { unregisterReceiver(unlockReceiver) }
+            runCatching { unregisterReceiver(sweepReceiver) }
+        })
         toggle("busy", settings.busyDot, ::privacyOn, ::privacyOff)
         updateBusy()
         toggle("vol", settings.volumeIndicator, ::volumeOn, ::volumeOff)
@@ -351,6 +358,16 @@ class GlyphService : Service() {
         override fun onReceive(ctx: Context, i: Intent) {
             updateAmbient()
             if ("viz" in enabled) syncViz()
+        }
+    }
+
+    private val sweepReceiver = object : BroadcastReceiver() {
+        private var lastAt = 0L
+        override fun onReceive(ctx: Context, i: Intent) {
+            val now = android.os.SystemClock.uptimeMillis()
+            if (quiet(ctx) || now - lastAt < 400) return // debounce bursts of app opens
+            lastAt = now
+            Engine.set(Layer.Indicator, Engine.sweep())
         }
     }
 
