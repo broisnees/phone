@@ -1,6 +1,8 @@
 package com.nees.launcher
 
 import android.app.WallpaperManager
+import android.graphics.Bitmap
+import android.graphics.Color as AColor
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
@@ -30,6 +32,7 @@ import com.nees.launcher.ui.LauncherTheme
 import com.nees.launcher.ui.RenameDialog
 import com.nees.launcher.ui.SettingsScreen
 import com.nees.launcher.ui.WidgetPicker
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -47,6 +50,7 @@ class MainActivity : ComponentActivity() {
         state.load()
         wallpaper = state.store.showWallpaper
         AppRepo.init(this, lifecycleScope)
+        ensureBlackWallpaper()
 
         lifecycleScope.launch {
             snapshotFlow { AppRepo.apps.value }.collect { list ->
@@ -102,6 +106,7 @@ class MainActivity : ComponentActivity() {
         wallpaper = state.store.showWallpaper
         if (wallpaper) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        ensureBlackWallpaper()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -123,6 +128,29 @@ class MainActivity : ComponentActivity() {
         startActivity(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
     private fun openAlarm() = openClock()
+
+    /**
+     * With "Show wallpaper" off (default), paint the system wallpaper solid black so the grey
+     * wallpaper can't peek at the home window's rounded corners during app-open transitions.
+     * Idempotent: guarded by a pref so it runs once, and re-arms when the user turns wallpaper on.
+     */
+    private fun ensureBlackWallpaper() {
+        val store = state.store
+        if (store.showWallpaper) { store.blackWallpaperSet = false; return }
+        if (store.blackWallpaperSet) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching {
+                val wm = WallpaperManager.getInstance(this@MainActivity)
+                val w = resources.displayMetrics.widthPixels.coerceAtLeast(1)
+                val h = resources.displayMetrics.heightPixels.coerceAtLeast(1)
+                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                bmp.eraseColor(AColor.BLACK)
+                wm.setBitmap(bmp, null, true, WallpaperManager.FLAG_SYSTEM)
+                bmp.recycle()
+                store.blackWallpaperSet = true
+            }
+        }
+    }
 
     private fun pickWallpaper() {
         runCatching { startActivity(Intent(Intent.ACTION_SET_WALLPAPER)) }

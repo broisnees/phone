@@ -21,6 +21,9 @@ data class Fav(val key: String, val alias: String = "") {
     }
 }
 
+/** Clock widget layout. */
+enum class ClockStyle { Stacked, Inline }
+
 /** All persisted state: favourites, hidden apps, native-widget toggles, preferences. */
 class Store(ctx: Context) {
     private val p = ctx.getSharedPreferences("launcher", Context.MODE_PRIVATE)
@@ -41,6 +44,10 @@ class Store(ctx: Context) {
     fun saveThirdPartyWidgets(ids: List<Int>) = p.edit().putString("tpw", JSONArray(ids).toString()).apply()
 
     var showClock get() = p.getBoolean("clock", true); set(v) = p.edit().putBoolean("clock", v).apply()
+    var clockStyle: ClockStyle
+        get() = runCatching { ClockStyle.valueOf(p.getString("clockStyle", "Stacked")!!) }.getOrDefault(ClockStyle.Stacked)
+        set(v) = p.edit().putString("clockStyle", v.name).apply()
+    var showClaude get() = p.getBoolean("claude", true); set(v) = p.edit().putBoolean("claude", v).apply()
     var showDate get() = p.getBoolean("date", true); set(v) = p.edit().putBoolean("date", v).apply()
     var showBattery get() = p.getBoolean("battery", true); set(v) = p.edit().putBoolean("battery", v).apply()
     var showAlarm get() = p.getBoolean("alarm", true); set(v) = p.edit().putBoolean("alarm", v).apply()
@@ -49,4 +56,6 @@ class Store(ctx: Context) {
     var doubleTapLock get() = p.getBoolean("dtLock", true); set(v) = p.edit().putBoolean("dtLock", v).apply()
     var swipeDownNotifications get() = p.getBoolean("swDown", true); set(v) = p.edit().putBoolean("swDown", v).apply()
     var glyphOnOpen get() = p.getBoolean("glyph", true); set(v) = p.edit().putBoolean("glyph", v).apply()
+    /** Tracks that we've already applied the solid-black system wallpaper (so we don't re-set each resume). */
+    var blackWallpaperSet get() = p.getBoolean("blackWp", false); set(v) = p.edit().putBoolean("blackWp", v).apply()
 }

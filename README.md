@@ -216,7 +216,7 @@ If System UI crash-loops: hold **Volume Down** during boot (Magisk safe mode, di
 
 ### Speed-ups (2026-10-31, later)
 - Screen locked at 120 Hz: `settings put system min_refresh_rate 120.0` (and peak 120).
-- Animation scale 0.3× (all three scales; user preference).
+- Animation scale 0.5× (all three scales; user preference 2026-10-31).
 - Disabled Nothing Smart Center: `pm disable-user --user 0 com.nothing.smartcenter` (undo: `pm enable com.nothing.smartcenter`).
 - Background-restricted Facebook, Instagram, Google Home (X un-restricted again + added to DenyList, 2026-10-31 — X login still blocked by Play Integrity; use x.com as a Chrome web app): `cmd appops set <pkg> RUN_ANY_IN_BACKGROUND ignore` + standby bucket `restricted` (undo: `... allow` and `am set-standby-bucket <pkg> active`).
 - Removed AFWall+ (and its Vector module entry).
@@ -378,3 +378,13 @@ Olauncher/Niagara-style launcher (`com.nees.launcher`, source `launcher-app/`, A
 **Perf:** no icon bitmaps anywhere; app list loads off-main-thread. Settled **76 MB PSS** (Graphics 42 MB = fullscreen surface, Java heap 4.4 MB), **0.0 % CPU idle**, 0 crashes. Before (icon grid): 102 MB with icons loaded.
 
 **Known limits:** "Glyph sweep on open" sends `com.nees.glyph.SWEEP` (default on) — needs Glyph Tweaks to handle that action; third-party widget bind may prompt once. No per-page grid (by design — it's a text launcher).
+
+
+### Nees Launcher update (2026-10-31, later)
+- **Clock redesign:** large light-weight Inter numerals, tight negative tracking, tabular figures (no jitter), minute-aligned. Muted-grey date line under it. Two styles in Settings → **Stacked** (big time over date) or **Inline** (time + date on one line).
+- **Claude usage widget (root):** reads Termux Claude Code JSONL (`/data/data/com.termux/files/home/.claude/projects/*/*.jsonl`) via `su --mount-master` (needed so the launcher's root shell sees Termux's data in the global mount namespace), extracts `timestamp`+token fields with `awk` from files modified in the last 6h, sums the current **5-hour rolling window**, and shows `<tokens> · resets in Hh Mm` with a thin elapsed bar. Verified live: **4.6M tokens, resets in 2h55m**. Only reads usage/timestamp numbers — never credentials. Shows "—" if Termux/Claude absent or root denied. Toggle in Settings. Refreshes every 60s while home is visible. Needs Magisk root granted to `com.nees.launcher`.
+- **Black-wallpaper flash fix:** the grey system wallpaper was peeking at the home window's rounded corners during app-open. When "Show wallpaper" is off (default), the launcher now sets a solid-black system wallpaper (`WallpaperManager.setBitmap`, FLAG_SYSTEM), idempotently (pref-guarded, re-armed when wallpaper is turned on). Verified: wallpaper bitmap brightness **0**; left edge black in **61/62** app-open frames (was a persistent grey strip). `windowBackground` stays opaque black; `FLAG_SHOW_WALLPAPER` not re-added.
+- **Pin/unpin (first-class):** drawer long-press → "Pin to home" / "Unpin from home" (wording reflects state); pinned apps show "· pinned" in the drawer. Home long-press → "Unpin from home" + rename/hide/app-info. Reorder pinned apps in Settings (↑/↓) or remove (✕). Persisted in the favourites store.
+- **Drawer auto-focus:** opening the drawer (swipe up) focuses the search field and raises the keyboard immediately; keyboard hides on close/launch. Home never steals focus.
+- `glyphOnOpen` now defaults ON (Glyph Tweaks has the `com.nees.glyph.SWEEP` receiver).
+- Perf: **51 MB PSS, 0.0% CPU idle, 0 crashes.** Root su resolved by absolute path + `--mount-master`.

@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import com.nees.launcher.AppInfo
 import com.nees.launcher.AppRepo
 import com.nees.launcher.Fav
+import com.nees.launcher.ClockStyle
 import com.nees.launcher.LauncherState
 
 @Composable
@@ -58,7 +59,7 @@ private fun MenuItem(label: String, onClick: () -> Unit) {
 fun FavMenu(state: LauncherState, fav: Fav, onDismiss: () -> Unit, onRename: (Fav) -> Unit) {
     MenuSheet(onDismiss, state.label(fav)) {
         MenuItem("Rename") { onRename(fav); onDismiss() }
-        MenuItem("Remove from home") { state.removeFav(fav.key); onDismiss() }
+        MenuItem("Unpin from home") { state.removeFav(fav.key); onDismiss() }
         MenuItem("Hide app") { state.hide(fav.key); onDismiss() }
         MenuItem("App info") { AppRepo.appInfo(fav.key); onDismiss() }
     }
@@ -69,8 +70,8 @@ fun FavMenu(state: LauncherState, fav: Fav, onDismiss: () -> Unit, onRename: (Fa
 fun DrawerAppMenu(state: LauncherState, app: AppInfo, onDismiss: () -> Unit) {
     val isFav = state.isFav(app.key)
     MenuSheet(onDismiss, app.label) {
-        if (isFav) MenuItem("Remove from home") { state.removeFav(app.key); onDismiss() }
-        else MenuItem("Add to home") { state.addFav(app.key); onDismiss() }
+        if (isFav) MenuItem("Unpin from home") { state.removeFav(app.key); onDismiss() }
+        else MenuItem("Pin to home") { state.addFav(app.key); onDismiss() }
         MenuItem("Hide app") { state.hide(app.key); onDismiss() }
         MenuItem("App info") { AppRepo.appInfo(app.key); onDismiss() }
     }
@@ -140,9 +141,11 @@ fun SettingsScreen(state: LauncherState, onAddWidget: () -> Unit, onClose: () ->
             Spacer(Modifier.height(S.l))
             Section("Home")
             Toggle("Clock", store.showClock) { store.showClock = it }
+            ClockStylePicker(state)
             Toggle("Date", store.showDate) { store.showDate = it }
             Toggle("Battery", store.showBattery) { store.showBattery = it }
             Toggle("Next alarm", store.showAlarm) { store.showAlarm = it }
+            Toggle("Claude usage", store.showClaude) { store.showClaude = it }
             Toggle("Show wallpaper", store.showWallpaper) { store.showWallpaper = it }
             Spacer(Modifier.height(S.l))
             Section("Gestures")
@@ -184,6 +187,23 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedFavs(stat
             Text("↑", style = T.title, color = C.text2, modifier = Modifier.tappable(Haptic.SELECT) { if (idx > 0) state.moveFav(idx, idx - 1) }.padding(horizontal = S.s))
             Text("↓", style = T.title, color = C.text2, modifier = Modifier.tappable(Haptic.SELECT) { if (idx < state.favourites.lastIndex) state.moveFav(idx, idx + 1) }.padding(horizontal = S.s))
             Text("✕", style = T.title, color = C.text2, modifier = Modifier.tappable(Haptic.SELECT) { state.removeFav(fav.key) }.padding(horizontal = S.s))
+        }
+    }
+}
+
+@Composable
+private fun ClockStylePicker(state: LauncherState) {
+    var style by remember { mutableStateOf(state.store.clockStyle) }
+    Row(Modifier.fillMaxWidth().padding(start = S.m, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Clock style", style = T.body, color = C.text2, modifier = Modifier.weight(1f))
+        ClockStyle.entries.forEach { opt ->
+            val on = style == opt
+            Text(
+                opt.name,
+                style = T.body,
+                color = if (on) C.text else C.text3,
+                modifier = Modifier.tappable(Haptic.SELECT) { style = opt; state.store.clockStyle = opt }.padding(horizontal = S.s),
+            )
         }
     }
 }

@@ -7,17 +7,42 @@ import java.io.DataOutputStream
 object Root {
     private var proc: Process? = null
     private var out: DataOutputStream? = null
+    @Volatile private var suPath: String? = null
+
+    // Magisk's su isn't always on an app process's PATH, so resolve it by absolute path.
+    private val candidates = listOf("su", "/system/bin/su", "/product/bin/su", "/system_ext/bin/su", "/vendor/bin/su", "/sbin/su", "/debug_ramdisk/su")
+
+    private fun su(): String {
+        suPath?.let { return it }
+        for (c in candidates) {
+            val ok = runCatching {
+                val p = ProcessBuilder(c, "--mount-master", "-c", "id").redirectErrorStream(true).start()
+                val o = p.inputStream.bufferedReader().readText()
+                p.waitFor() == 0 && o.contains("uid=0")
+            }.getOrDefault(false)
+            if (ok) { suPath = c; return c }
+        }
+        return "su".also { suPath = it }
+    }
 
     @Synchronized
     private fun shell(): DataOutputStream? {
         out?.let { return it }
         return runCatching {
-            val p = ProcessBuilder("su").redirectErrorStream(true).start()
+            val p = ProcessBuilder(su(), "--mount-master").redirectErrorStream(true).start()
             Thread { runCatching { p.inputStream.copyTo(java.io.OutputStream.nullOutputStream()) } }.apply { isDaemon = true }.start()
             proc = p
             DataOutputStream(p.outputStream).also { out = it }
         }.getOrNull()
     }
+
+    /** Runs [cmd] via a fresh su and returns its stdout (null on failure). For one-shot reads. */
+    fun capture(cmd: String): String? = runCatching {
+        val p = ProcessBuilder(su(), "--mount-master", "-c", cmd).redirectErrorStream(false).start()
+        val o = p.inputStream.bufferedReader().readText()
+        p.waitFor()
+        o
+    }.getOrNull()
 
     @Synchronized
     fun run(cmd: String): Boolean {
