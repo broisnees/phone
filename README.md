@@ -267,3 +267,17 @@ Disable: `adb shell su -c '/data/adb/lspd/cli modules disable com.nees.unscroll'
 
 **Unscroll v2 (2026-10-31):** Instagram reel viewers matched by any `clips_viewer*` id plus the `clips_homecoming_*` feed; inline `clips_carousel_viewpager` shelves hidden. Players now get their pagers' touch input disabled before closing; a reel opened on its own screen (e.g. from a DM) finishes that activity, otherwise back is pressed up to 3× until the player is gone. Unknown `clips_*` ids are logged once as `Unscroll: seen <id> in <Activity>` — check with `grep Unscroll` in the newest `/data/adb/lspd/log/modules_*.log` and add them to `IG_FEEDS`.
 
+## MaxQ (YouTube max quality) — ENABLED
+
+LSPosed/Vector module `com.nees.maxq` (source `maxq/app/src/main/java/com/nees/maxq/Hooks.java`, APK `maxq/app/build/outputs/apk/release/app-release.apk`). Official YouTube, no patched APK.
+
+- Every time YouTube sets a video's quality list, MaxQ picks the **highest resolution** (skipping "Premium" entries) and applies it through YouTube's own quality-menu method. It switches when the player is on Auto, and once per new video; a quality you pick by hand on the same video is left alone.
+- Mechanism ported from Morphe (ReVanced continuation) `VideoInformationPatch` / `RememberVideoQualityPatch`, MorpheApp/morphe-patches @ `0bb704a9a4edb5324f6e607f3fc5a531713c607c` (ReVanced's own GitHub repo is DMCA-blocked).
+- Fingerprints (found at runtime with DexKit 2.3.0, cached in `/data/data/com.google.android.youtube/maxq_cache.properties` until YouTube's APK changes):
+  - quality setter: `public final void ?(VideoQuality[], int, boolean)` using string `"menu_item_video_quality"` → `ocq.l` on 21.41.529
+  - its `void ?(X)` method reading field F then writing field G on F's object → `ocq.f` (`qrw`) → `qrw.av` (`arqs`)
+  - `void ?(VideoQuality)` on G's type → `arqs.b(albv)`; VideoQuality `albv`: int resolution, String label
+- Log: `grep MaxQ` in the newest `/data/adb/lspd/log/modules_*.log` — expect `ready … (scanned|cached)` at YouTube start and `set 1080p60 (was Auto)` per video.
+- Disable: `adb shell su -c '/data/adb/lspd/cli modules disable com.nees.maxq'` then `am force-stop com.google.android.youtube`.
+- After a YouTube update: nothing to do if the log still says `ready`; it rescans automatically. If it logs `quality setter not found` / `setQuality … not found`, YouTube changed the code shape — re-check the Morphe fingerprints (`patches/youtube/video/information/Fingerprints.kt`).
+
