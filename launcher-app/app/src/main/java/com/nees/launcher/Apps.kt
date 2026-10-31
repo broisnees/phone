@@ -53,9 +53,11 @@ object AppRepo {
 
     fun launch(key: String) {
         val info = byKey[key] ?: return
-        // Let the system (Nothing OS) run its own app-open animation over our opaque black window;
-        // a custom animation leaves a gap that reveals the grey transition backdrop.
-        runCatching { launcherApps.startMainActivity(ComponentName(info.pkg, info.cls), Process.myUserHandle(), null, null) }
+        // Center scale+fade open over the black launcher/wallpaper — the app expands rather than
+        // sliding in from the edge, so no grey app-edge reveal (old-Nothing feel).
+        val opts = android.app.ActivityOptions.makeCustomAnimation(appContext, R.anim.app_open_enter, R.anim.app_open_exit).toBundle()
+        runCatching { launcherApps.startMainActivity(ComponentName(info.pkg, info.cls), Process.myUserHandle(), null, opts) }
+            .onFailure { runCatching { launcherApps.startMainActivity(ComponentName(info.pkg, info.cls), Process.myUserHandle(), null, null) } }
     }
 
     fun appInfo(key: String) {

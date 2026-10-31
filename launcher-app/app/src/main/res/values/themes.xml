@@ -12,6 +12,7 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <!-- No starting-window splash flash for the home itself. -->
         <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowAnimationStyle">@style/Launcher.WindowAnim</item>
     </style>
     <style name="Launcher.WindowAnim" parent="@android:style/Animation.Activity">
         <item name="android:activityOpenEnterAnimation">@anim/app_open_enter</item>
