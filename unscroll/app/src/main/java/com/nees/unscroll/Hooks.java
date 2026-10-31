@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -47,10 +46,10 @@ public class Hooks implements IXposedHookLoadPackage {
     private static final Set<String> IG_FEEDS = set("clips_homecoming_swipe_refresh_container", "clips_homecoming_refresh_container_view_stub");
     /** Inline reel carousels inside the home feed. */
     private static final Set<String> IG_SHELVES = set("clips_carousel_viewpager");
+    /** The vertical pagers that swipe to the next Short/Reel. */
+    private static final Set<String> PAGERS = set("reel_watch_pager_view_pager", "clips_viewer_view_pager");
     private final Set<String> seenIds = new HashSet<>();
     private static final Pattern FB_TAB = Pattern.compile("^(reels|video)\\b.*\\btab\\b.*", Pattern.CASE_INSENSITIVE);
-
-    private static final long BACK_DEBOUNCE_MS = 900;
 
     private String pkg;
     private String shortsLabel = "shorts";
@@ -60,7 +59,8 @@ public class Hooks implements IXposedHookLoadPackage {
     private final Set<View> hidden = Collections.newSetFromMap(new WeakHashMap<>());
     /** Feed rows we collapsed. RecyclerView reuses rows, so these are restored on re-attach and re-checked. */
     private final Map<View, Integer> collapsedRows = new WeakHashMap<>();
-    private long lastBack;
+    /** Pagers we already locked. */
+    private final Set<View> locked = Collections.newSetFromMap(new WeakHashMap<>());
     private boolean labelResolved;
 
     private static Set<String> set(String... s) { return new HashSet<>(Arrays.asList(s)); }
@@ -155,9 +155,11 @@ public class Hooks implements IXposedHookLoadPackage {
         CharSequence descCs = v.getContentDescription();
         String desc = descCs == null ? null : descCs.toString().trim();
 
+        if (!pkg.equals(FB) && isPagerInPlayer(v, name)) { lockPager(v, name); return; }
+
         switch (pkg) {
             case YT:
-                if (name != null && YT_PLAYER.contains(name)) { leave(v, "Shorts player"); return; }
+                if (name != null && YT_PLAYER.contains(name)) return;
                 if (desc != null && desc.toLowerCase(Locale.ROOT).equals(shortsLabel)) {
                     if (hasAncestorNamed(v, "pivot_bar", 6)) hide(v, "Shorts tab");
                     else hideFeedItem(v, "Shorts shelf/chip");
@@ -166,7 +168,7 @@ public class Hooks implements IXposedHookLoadPackage {
             case IG:
                 if (name != null && IG_TABS.contains(name)) { hide(v, "Reels tab"); return; }
                 if (name == null) break;
-                if (IG_PLAYER.contains(name) || name.startsWith("clips_viewer") || IG_FEEDS.contains(name)) { leave(v, "Reels viewer (" + name + ")"); return; }
+                if (isPlayer(name)) return;
                 if (IG_SHELVES.contains(name)) { hideFeedItem(v, "Reels shelf (" + name + ")"); return; }
                 // Learn unknown reel surfaces: log each distinct clips_* id once so the next build can target it.
                 if (name.startsWith("clips_") && !name.startsWith("clips_editor") && seenIds.add(name)) {
@@ -247,51 +249,35 @@ public class Hooks implements IXposedHookLoadPackage {
         row.setVisibility(View.VISIBLE);
     }
 
+    private static boolean isPlayer(String name) {
+        return name != null && (YT_PLAYER.contains(name) || IG_PLAYER.contains(name) || IG_FEEDS.contains(name) || name.startsWith("clips_viewer"));
+    }
+
     /**
-     * Leave a Shorts/Reels player: lock its swiping first (so nothing can be scrolled even for a
-     * frame), then close it. A dedicated screen (e.g. a reel opened from a DM) is finished outright;
-     * inside the main tab activity we press back, re-checking up to 3 times until the player is gone.
+     * The swipe-to-next pager of a Shorts/Reels player: a known pager id, a ViewPager inside a
+     * player, or a RecyclerView just below one. Deeper lists (comments) stay scrollable.
      */
-    private void leave(View v, String what) {
-        lockScroll(v, 0);
-        long now = SystemClock.uptimeMillis();
-        if (now - lastBack < BACK_DEBOUNCE_MS) return;
-        Activity a = activityOf(v.getContext());
-        if (a == null) return;
-        lastBack = now;
-        boolean main = a.getClass().getName().endsWith("MainTabActivity") || a.getClass().getName().endsWith("MainActivity")
-            || a.getClass().getName().endsWith("WatchWhileActivity");
-        if (!main) {
-            v.post(() -> { try { a.finish(); log("closed " + what + " (" + a.getClass().getSimpleName() + ")"); } catch (Throwable t) { log("finish failed: " + t); } });
-            return;
-        }
-        backUntilGone(a, v, what, 0);
-    }
-
-    private void backUntilGone(Activity a, View v, String what, int attempt) {
-        v.postDelayed(() -> {
-            try {
-                if (attempt > 0 && !v.isAttachedToWindow()) return;
-                if (attempt >= 3) { log("gave up closing " + what); return; }
-                a.onBackPressed();
-                log("blocked " + what + (attempt > 0 ? " (retry " + attempt + ")" : ""));
-                backUntilGone(a, v, what, attempt + 1);
-            } catch (Throwable t) { log("back failed: " + t); }
-        }, attempt == 0 ? 0 : 350);
-    }
-
-    /** Swallow touches on pagers/recyclers inside a player so reels can't be swiped through. */
-    private void lockScroll(View v, int depth) {
-        if (depth > 4) return;
+    private boolean isPagerInPlayer(View v, String name) {
+        if (name != null && PAGERS.contains(name)) return true;
         String cls = v.getClass().getName();
-        if (cls.contains("ViewPager") || cls.endsWith("RecyclerView")) {
-            v.setOnTouchListener((x, e) -> true);
-            try { v.getClass().getMethod("setUserInputEnabled", boolean.class).invoke(v, false); } catch (Throwable ignored) { }
+        boolean pager = cls.contains("ViewPager");
+        if (!pager && !cls.endsWith("RecyclerView")) return false;
+        ViewParent p = v.getParent();
+        for (int i = 0, depth = pager ? 10 : 3; i < depth && p instanceof View; i++, p = p.getParent()) {
+            if (isPlayer(entryName((View) p))) return true;
         }
-        if (v instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) v;
-            for (int i = 0; i < g.getChildCount(); i++) lockScroll(g.getChildAt(i), depth + 1);
-        }
+        return false;
+    }
+
+    /**
+     * Let the opened Short/Reel play (like, comment, follow all work) but stop swiping to the next one:
+     * the pager swallows drags, while taps still reach the buttons on the page.
+     */
+    private void lockPager(View v, String name) {
+        if (!locked.add(v)) return;
+        v.setOnTouchListener((x, e) -> true);
+        try { v.getClass().getMethod("setUserInputEnabled", boolean.class).invoke(v, false); } catch (Throwable ignored) { }
+        log("locked pager " + (name != null ? name : v.getClass().getSimpleName()));
     }
 
     private static Activity activityOf(Context c) {
