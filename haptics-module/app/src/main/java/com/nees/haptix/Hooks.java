@@ -35,8 +35,8 @@ public class Hooks implements IXposedHookLoadPackage {
     private static final String TAG = "Haptix: ";
 
     private static final int SELECTION = HapticFeedbackConstants.CLOCK_TICK;
-    private static final int IMPACT = HapticFeedbackConstants.VIRTUAL_KEY;
-    private static final int SUCCESS = HapticFeedbackConstants.CONFIRM;
+    private static final int IMPACT = HapticFeedbackConstants.CLOCK_TICK;
+    private static final int SUCCESS = HapticFeedbackConstants.CLOCK_TICK;
 
     private static final long GAP = 120;        // between unrelated haptics
     private static final long KEY_REPEAT_GAP = 60; // volume key auto-repeat
