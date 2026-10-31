@@ -53,7 +53,10 @@ object AppRepo {
 
     fun launch(key: String) {
         val info = byKey[key] ?: return
-        runCatching { launcherApps.startMainActivity(ComponentName(info.pkg, info.cls), Process.myUserHandle(), null, null) }
+        // Custom fade/scale on every open, so there's no hard snap or white edge flash.
+        val opts = android.app.ActivityOptions.makeCustomAnimation(appContext, R.anim.app_open_enter, R.anim.app_open_exit).toBundle()
+        runCatching { launcherApps.startMainActivity(ComponentName(info.pkg, info.cls), Process.myUserHandle(), null, opts) }
+            .onFailure { runCatching { launcherApps.startMainActivity(ComponentName(info.pkg, info.cls), Process.myUserHandle(), null, null) } }
     }
 
     fun appInfo(key: String) {
