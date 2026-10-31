@@ -3,20 +3,44 @@
 # Install: cp phone $PREFIX/bin/ && chmod 755 $PREFIX/bin/phone
 set -euo pipefail
 
-LSPD=/data/adb/lspd/cli
-LSPD_DB=/data/adb/lspd/config/modules_config.db
 CHARGE_CONF=/data/adb/chargelimit.conf
 TS=/data/adb/tricky_store
 
 root() { su -c "$*"; }
-# The Vector CLI prints nothing when called through Termux's su (it only answers adb shell),
-# so the module list is read from Vector's database instead (read-only).
-lspd_ls() {
-  command -v sqlite3 >/dev/null || die "needs sqlite: pkg install sqlite"
-  root "$(command -v sqlite3) -readonly -separator ' ' $LSPD_DB \"select module_pkg_name, case enabled when 1 then 'on' else 'off' end from modules where module_pkg_name != 'lspd'\"" |
-    awk '{printf "%-32s %s\n", $1, $2}'
-}
 die() { echo "phone: $*" >&2; exit 1; }
+
+# Vector (LSPosed) daemon. Its Java CLI (/data/adb/lspd/cli) prints nothing when started through
+# Termux's su, so we speak its socket protocol directly: two magic longs, then Java writeUTF(JSON
+# request) → readUTF(JSON response). Usage: vector <action> [pkg...]  (action: ls | enable | disable)
+vector() {
+  local js=${TMPDIR:-/tmp}/phone-vector.js action=$1; shift
+  local targets; targets=$(printf '"%s",' "$@"); targets="[${targets%,}]"
+  [ $# -eq 0 ] && targets="[]"
+  cat > "$js" <<'JS'
+const net = require("net");
+const [action, json] = process.argv.slice(2);
+const req = Buffer.from(json, "utf8");
+const head = Buffer.alloc(18);
+head.writeBigInt64BE(547804284405368043n, 0);
+head.writeBigInt64BE(-8221824086627864083n, 8);
+head.writeUInt16BE(req.length, 16);
+const s = net.createConnection("/data/adb/lspd/.cli_sock", () => s.write(Buffer.concat([head, req])));
+let buf = Buffer.alloc(0);
+s.on("data", d => {
+  buf = Buffer.concat([buf, d]);
+  if (buf.length < 2 || buf.length < 2 + buf.readUInt16BE(0)) return;
+  s.destroy();
+  const r = JSON.parse(buf.subarray(2, 2 + buf.readUInt16BE(0)).toString("utf8"));
+  if (!r.success) { console.error("vector: " + (r.error || "failed")); process.exit(1); }
+  if (action === "ls") for (const m of r.data) console.log(m.PACKAGE.padEnd(32) + " " + (m.STATUS === "enabled" ? "on" : "off"));
+  else if (r.data != null) console.log(typeof r.data === "string" ? r.data : JSON.stringify(r.data));
+});
+s.on("error", e => { console.error("vector: " + e.message); process.exit(1); });
+JS
+  local opts='{}'
+  [ "$action" = ls ] && opts='{"enabled":false,"disabled":false}'
+  root "$(command -v node) $js $action '{\"command\":\"modules\",\"action\":\"$action\",\"targets\":$targets,\"options\":$opts}'"
+}
 
 usage() {
   cat <<'EOF'
@@ -28,7 +52,7 @@ usage: phone <command> [args]
   mods                       list Magisk modules
   mod on|off <id>            enable/disable a Magisk module (applies after reboot)
   xposed                     list LSPosed (Vector) modules
-  xposed on|off <pkg>        print the adb command to toggle an LSPosed module
+  xposed on|off <pkg>        enable/disable an LSPosed module
   log [filter] [n]           last n (default 30) LSPosed module log lines, e.g. `phone log Unscroll`
   restart <pkg>              force-stop an app so hooks reload (e.g. com.instagram.android)
   keybox                     show the TrickyStore keybox and spoofed security patch
@@ -78,12 +102,11 @@ mod() {
 }
 
 xposed() {
-  if [ $# -eq 0 ]; then lspd_ls; return; fi
+  if [ $# -eq 0 ]; then vector ls; return; fi
   [ $# -eq 2 ] && [[ $1 == on || $1 == off ]] || die "usage: phone xposed on|off <pkg>"
-  local verb=enable; [ "$1" = off ] && verb=disable
-  # See lspd_ls: toggling has to go through adb shell (or the Vector manager app).
-  echo "from your Mac: adb shell su -c '$LSPD modules $verb $2'"
-  echo "then restart the hooked apps (phone restart <pkg>)"
+  [[ $2 =~ ^[A-Za-z0-9_.]+$ ]] || die "not a package name: $2"
+  vector "$([ "$1" = on ] && echo enable || echo disable)" "$2"
+  echo "$2 → $1; restart the hooked apps to apply (phone restart <pkg>)"
 }
 
 log() {
@@ -126,7 +149,7 @@ status() {
   echo "integrity  $(root "grep -o 'DeviceID=\"[^\"]*\"' $TS/keybox.xml | head -1")"
   sshd_cmd status
   echo; echo "Magisk modules:"; mods
-  echo; echo "LSPosed modules:"; lspd_ls
+  echo; echo "LSPosed modules:"; vector ls
 }
 
 cmd=${1:-help}
