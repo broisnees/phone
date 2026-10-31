@@ -104,6 +104,7 @@ Switch: `adb shell su -c 'sh /data/adb/fontswitch inter|roboto|stock'` then rebo
 | `install/` | **Every ready-to-install file**: Talk.apk, Haptix.apk, Unscroll.apk, MaxQ.apk, NotifStyle/InterFont Magisk zips, Magisk, Vector, PIF, TrickyStore, AdAway, Neo Backup, AFWall+, ACC, GCam configs |
 | `talk-app/` | Talk (dialer + SMS) source — Kotlin/Compose. Build: `gradle :app:assembleRelease`, then `cmd package compile -m speed -f com.nees.talk` |
 | `haptics-module/`, `unscroll/`, `maxq/` | Source of the three LSPosed modules (Haptix, Unscroll, MaxQ) |
+| `force120/` | Force120 LSPosed module — every app at 120 Hz (see *Display: 120 Hz everywhere*) |
 | `overlay-src/` | NotifStyle RRO source + test notification app |
 | `fonts/` | Inter 4.1 + the Inter system-font Magisk module source |
 | `camera/` | GCam AGC 9.1 V13 (snap) APK + Phone (1) configs |
@@ -355,6 +356,24 @@ Magisk module **nees_fullscreen** (source `display-fix/module/`, zip `install/Fu
 **Revert:** uninstall the module in Magisk (restores `force_resizable` off on next boot), or now: `adb shell su -c 'settings delete global force_resizable_activities'`. Undo one app's aspect override: `adb shell su -c 'am compat reset-all <pkg>'`.
 
 **Risks:** a few apps may render oddly when forced resizable (rare, reversible); camera/games excluded; forcing aspect on a fixed-portrait game can crop it — use the exclude list.
+
+## Display: 120 Hz everywhere — Force120 (2026-10-31)
+
+LSPosed (Vector) module `com.nees.force120` (source `force120/app/src/main/java/com/nees/force120/Hooks.java`, APK `install/Force120.apk`), scoped to **System Framework** (`system/0`).
+
+**Problem:** with `min_refresh_rate=peak_refresh_rate=120` set, some apps (Snapchat) still ran at 60 Hz. They set `preferredMaxDisplayRefreshRate` / `preferredDisplayModeId` on their window, and in `DisplayModeDirector` the `PRIORITY_APP_REQUEST_*` votes outrank `PRIORITY_USER_SETTING_MIN_RENDER_FRAME_RATE`, so the app's 60–60 range won. Second bug: after boot the user-min vote was missing entirely until `min_refresh_rate` was changed.
+
+**Fix (in system_server):**
+- `DisplayModeDirector$AppRequestObserver.setAppRequest(display, modeId, rr, min, max)` — zeroes `modeId`/`rr`/`min`/`max`, so no app request (layout params, high-refresh denylist, per-package game/OEM ranges) can cap the rate. This is the real fix; the `RefreshRatePolicy.getPreferred{Max,Min}RefreshRate/getPreferredModeId` hooks are also there but get bypassed because ART inlines them into `DisplayContent`.
+- `DisplayModeDirector.onBootCompleted` → 5 s later toggles `min_refresh_rate` 0 → 120 to re-register the min-120 vote.
+
+**Result:** only user votes remain (min 120, peak 120); Snapchat verified at `vsyncRate=120.00 Hz`. Trade-off: video apps that would drop to 60 Hz stay at 120 (a little more battery).
+
+**Install / enable:** `adb install -r install/Force120.apk`, then `adb shell su -c '/data/adb/lspd/cli modules enable com.nees.force120; /data/adb/lspd/cli scope add com.nees.force120 system/0'`, then restart the phone (system_server hooks only load at boot).
+
+**Verify:** `adb shell su -c 'grep -ah Force120 /data/adb/lspd/log/*.log | tail'` (expect `hooked setAppRequest` + `reasserted min_refresh_rate=120.0`); with an app open, `adb shell dumpsys display | grep -A8 mVotesByDisplay` should show no `PRIORITY_APP_REQUEST_*RATE*` votes, and `adb shell dumpsys SurfaceFlinger | grep activeMode` → `120.00 Hz`.
+
+**Disable:** `adb shell su -c '/data/adb/lspd/cli modules disable com.nees.force120'`, then restart the phone.
 
 
 ## Nees Launcher (minimal text launcher) — DEFAULT (2026-10-31)
